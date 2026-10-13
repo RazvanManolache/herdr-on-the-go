@@ -1,6 +1,7 @@
 package io.github.razvanmanolache.herdronthego
 
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONObject
@@ -91,8 +92,39 @@ class PairedProtocolTest {
             assertNull(c.error)
             assertTrue(c.pendingActions.isEmpty())
             await { c.paneText[target.id]?.contains("PAIRED_$marker") == true }
+            val preservedDraft = "Keep this draft through a reconnect"
+            ui { c.setDraft(target, preservedDraft) }
+            // An idle transport must keep itself alive without the controller's UI polls.
+            val idle = PairedBridge(conn.certificate)
+            try {
+                idle.connect(conn.host, conn.port, conn.user, c.passwordFor(conn)!!, onHostKey = { false })
+                idle.openStdio(session)
+                scenario.moveToState(Lifecycle.State.CREATED)
+                Thread.sleep(70000)
+                assertTrue("Idle paired transport disconnected", idle.isConnected())
+                assertEquals("ack", idle.request("timeline.subscribe", session,
+                    JSONObject().put("paneIds", org.json.JSONArray()).put("active", false), "ack", 10000).type)
+            } finally { idle.disconnect() }
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            await { c.active()?.attached == true }
+            val original = c.active()!!
+            val previousEpoch = original.attachmentEpoch
+            report.writeText(JSONObject().put("fixture", fixtureToken).put("drop", conn.user).toString())
+            await(45) { c.active() === original && original.attached && original.attachmentEpoch > previousEpoch }
+            assertEquals(target.id, c.currentPaneId)
+            assertEquals(preservedDraft, c.draft(target))
+            assertTrue(c.pendingActions.isEmpty())
+            ui { c.disconnect() }
+            await { c.servers.isEmpty() }
+            Thread.sleep(3000)
+            assertTrue("Manual disconnect must not reconnect", c.servers.isEmpty())
+            ui { c.openConnection(conn, c.passwordFor(conn)) { false } }
+            await { c.busy == null && c.active() != null }
+            ui { c.attach(session) }
+            await { c.busy == null && c.active()?.attached == true }
             report.writeText(JSONObject().put("fixture", fixtureToken).put("revoke", conn.user).toString())
-            await { c.active()?.attached == false }
+            await { c.active()?.attached == false && c.active()?.keepConnected == false }
+            assertEquals("needs attention", c.active()?.connPhase)
             ui { c.openConnection(conn, c.passwordFor(conn)) { throw AssertionError("Paired mode must not prompt for SSH") } }
             await { c.busy == null }
             assertNotNull(c.error)

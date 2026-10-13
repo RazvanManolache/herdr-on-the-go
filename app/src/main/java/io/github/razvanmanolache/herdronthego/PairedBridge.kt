@@ -13,11 +13,15 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.X509TrustManager
+
+class PairingRequiredException(message: String) : IOException(message)
 
 data class PairAddress(val host: String, val port: Int, val fingerprint: String) {
     companion object {
@@ -86,7 +90,13 @@ class PinnedTlsClient(private val address: PairAddress) : Closeable {
         try {
             write(socket.outputStream, message)
             return read(BufferedInputStream(socket.inputStream))
-                .also { if (it.has("error")) throw IOException(it.getString("error")) }
+                .also {
+                    if (it.has("error")) {
+                        val message = it.getString("error")
+                        if (message == "Device is not paired or was revoked") throw PairingRequiredException(message)
+                        throw IOException(message)
+                    }
+                }
         } finally { socket.close(); release(socket) }
     }
 
@@ -123,6 +133,7 @@ class PairedBridge(private val fingerprint: String) : BridgeConnection {
     private var secret = ""
     @Volatile private var connected = false
     @Volatile private var stream: SSLSocket? = null
+    private var heartbeat: ScheduledExecutorService? = null
     private val generation = AtomicLong()
     private val sequence = AtomicLong()
     private val replies = ReplyRouter<Frame>()
@@ -166,6 +177,7 @@ class PairedBridge(private val fingerprint: String) : BridgeConnection {
     }
     override fun closeStdio() {
         generation.incrementAndGet()
+        heartbeat?.shutdownNow(); heartbeat = null
         val old = stream; stream = null
         try { old?.close() } catch (_: Exception) {}
         replies.disconnect()
@@ -206,6 +218,27 @@ class PairedBridge(private val fingerprint: String) : BridgeConnection {
                     }
                 }
             }, "herdr-paired-reader").also { it.isDaemon = true; it.start() }
+            synchronized(this) {
+                if (epoch != generation.get() || stream !== socket) throw IOException("Connection cancelled")
+                heartbeat = Executors.newSingleThreadScheduledExecutor { task ->
+                    Thread(task, "herdr-paired-keepalive").also { it.isDaemon = true }
+                }.also { timer ->
+                    timer.scheduleWithFixedDelay({
+                        try {
+                            // Existing servers already support this read-only request. No new wire protocol.
+                            // Snapshot events are unsolicited and have no requestId. An empty,
+                            // inactive subscription has a correlated ack and reads no pane data.
+                            request("timeline.subscribe", sessionName, JSONObject()
+                                .put("clientId", "android-keepalive")
+                                .put("paneIds", org.json.JSONArray()).put("active", false), "ack", 15000)
+                        } catch (_: Exception) {
+                            // Closing the exact socket wakes its reader and the controller's reconnect path.
+                            try { socket.close() } catch (_: Exception) {}
+                            timer.shutdown()
+                        }
+                    }, 20, 20, TimeUnit.SECONDS)
+                }
+            }
         } catch (e: Exception) { socket.close(); owner.release(socket); throw e }
     }
     @Synchronized override fun send(type: String, sessionId: String, payload: JSONObject): String {

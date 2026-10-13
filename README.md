@@ -20,14 +20,14 @@ This project is released under **GPLv3**.
 I also added **A− / A+ font controls** because I'm getting older, and sometimes
 the most useful upgrade is a bigger font. Squinting is not a productivity feature.
 
-[Download the first APK](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.1.1) ·
+[Download APK v0.2.1](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.1) ·
 [Windows bridge](https://github.com/RazvanManolache/herdr-bridge) ·
 [Build and setup guide](docs/BUILD.md) ·
 [License](LICENSE)
 
-The current source includes **0.2.0 device pairing** and the navigation improvements
-described below. The first published GitHub APK is 0.1.1; 0.2.0 is currently a
-local development build. [Pair without a Windows login](docs/PAIRING.md).
+Version **0.2.1** adds persistent paired connections, device pairing, and the
+navigation improvements described below. Install it over 0.1.1 or the 0.2.0
+preview to keep your saved connections. [Pair without a Windows login](docs/PAIRING.md).
 
 This is an **unofficial, independent companion for [Herdr](https://herdr.dev/)**,
 not an official Herdr Android release. The app's display name is **Herdr on the Go**.
@@ -53,7 +53,7 @@ to my private machines. [Screenshot provenance and reproduction](docs/images/scr
 
 ## What it does
 
-- **Keep several computers connected.** Up to four SSH connections stay open;
+- **Keep several computers connected.** Up to four connections stay open;
   switching computers swaps the whole view, including its panes and drafts.
 - **Choose a Herdr session.** Named sessions are discovered through the bridge,
   and the selected session is remembered for reconnects.
@@ -85,17 +85,17 @@ can contain multiple workspaces, tabs, and panes.
 ## Try it
 
 You need **Android 8.0 or newer**, a Windows machine running Herdr, and the
-[Windows bridge installed for the SSH account](https://github.com/RazvanManolache/herdr-bridge#readme).
-The bridge has been verified with Herdr **0.9.3**. The app currently uses SSH
-password authentication for SSH connections; development version 0.2.0 also
-supports independent device pairing as described in [the pairing guide](docs/PAIRING.md).
+[Windows bridge](https://github.com/RazvanManolache/herdr-bridge#readme).
+The bridge has been verified with Herdr **0.9.3**. Choose SSH password
+authentication or independent device pairing as described in [the pairing guide](docs/PAIRING.md).
 
-1. Download `herdr-on-the-go-0.1.1.apk` from the
-   [v0.1.1 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.1.1)
+1. Download `herdr-on-the-go-0.2.1.apk` from the
+   [v0.2.1 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.1)
    and open it on your Android device. If prompted, allow installation for the
    browser or file manager you are using.
-2. Add your computer's reachable LAN or VPN address, SSH port, username, and password.
-3. Verify the displayed SSH fingerprint against your server before accepting it.
+2. Tap **Pair without Windows login**, scan the PC's QR, and approve the phone's
+   code inside Herdr. Alternatively, add your computer's SSH address and credentials.
+3. For SSH, verify the displayed fingerprint against your server before accepting it.
 4. Choose a running Herdr session, open a pane, and send a message.
 5. Add another computer and use the header or unified tab picker to move between them.
 

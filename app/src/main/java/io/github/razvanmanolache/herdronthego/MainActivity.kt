@@ -35,6 +35,11 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::controller.isInitialized) controller.resumeConnections()
+    }
+
     /** Notification tap: land on the finished tab, reconnecting if needed. */
     private fun handleDeepLink(intent: Intent?) {
         val key = intent?.getStringExtra(AgentNotif.EXTRA_SERVER) ?: return

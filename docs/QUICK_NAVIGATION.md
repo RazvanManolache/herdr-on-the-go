@@ -37,5 +37,5 @@ Checked 2026-10-13:
 
 No physical phones or previously installed apps were changed. This verifies
 the real Windows bridge behind synthetic SSH authentication, rather than real
-Windows SSH account authentication. Version 0.1.2 is a local development build;
-the published GitHub release remains 0.1.1.
+Windows SSH account authentication. The navigation improvements first tested in
+the 0.1.2 development build are included in the public 0.2.1 release.

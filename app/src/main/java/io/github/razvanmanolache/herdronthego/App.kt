@@ -82,6 +82,9 @@ class ServerConn(
     var sessionPassword: String? = null
     var rememberPassword = false
     var attachmentEpoch = 0L
+    var keepConnected = false
+    var reconnectAttempts = 0
+    var reconnectAfter = 0L
     var lastSnapshotPoll = 0L
     /** Last seen pane status per pane, for finish-flip detection. */
     val lastStatus = ConcurrentHashMap<String, String>()
@@ -579,13 +582,14 @@ class BridgeController(private val ctx: Context) {
         work { try { attachNow(srv, session) } finally { onUi { busy = null } } }
     }
 
-    private fun attachNow(srv: ServerConn, sessionName: String) {
+    private fun attachNow(srv: ServerConn, sessionName: String, recovering: Boolean = false) {
         require(SshBridge.validSession(sessionName)) { "Select a running session" }
         if (!srv.bridge.isConnected()) {
             val password = srv.sessionPassword ?: passwordFor(srv.conn)
                 ?: throw IOException(if (srv.conn.protocol == "paired") "Pair this phone again from Herdr" else "Enter your SSH password again")
             connectNow(srv.conn.copy(session = sessionName), password, { askHostKey(it) }, srv.rememberPassword)
         }
+        val previousPane = if (recovering) srv.currentPaneId else null
         AgentNotif.cancelServer(ctx, srv)
         srv.notified.clear()
         srv.lastStatus.clear()
@@ -593,14 +597,18 @@ class BridgeController(private val ctx: Context) {
         val epoch = srv.attachmentEpoch
         srv.attached = false
         srv.currentSession = sessionName
-        srv.snapshot = null
-        srv.paneText.clear()
-        srv.paneRevision.clear()
-        srv.historyLines.clear()
+        if (!recovering) {
+            srv.snapshot = null
+            srv.paneText.clear()
+            srv.paneRevision.clear()
+            srv.historyLines.clear()
+        }
         srv.lastStatus.clear()
         srv.notified.clear()
-        srv.currentPaneId = null
-        srv.currentTabId = null
+        if (!recovering) {
+            srv.currentPaneId = null
+            srv.currentTabId = null
+        }
         val hello = CompletableFuture<HelloInfo>()
         val snapshot = CompletableFuture<SnapshotState>()
         srv.helloWaiter.set(hello)
@@ -611,6 +619,7 @@ class BridgeController(private val ctx: Context) {
                     srv.helloWaiter.getAndSet(null)?.completeExceptionally(e)
                     srv.snapshotWaiter.getAndSet(null)?.completeExceptionally(e)
                     srv.attached = false
+                    srv.keepConnected = false
                     srv.connPhase = "protocol error"
                     error = "The bridge returned invalid data. Reconnect after checking the server"
                     work { srv.bridge.closeStdio() }
@@ -620,7 +629,12 @@ class BridgeController(private val ctx: Context) {
         srv.bridge.onDisconnect = {
             srv.helloWaiter.getAndSet(null)?.completeExceptionally(IOException("Bridge disconnected"))
             srv.snapshotWaiter.getAndSet(null)?.completeExceptionally(IOException("Bridge disconnected"))
-            onUi { if (srv.attachmentEpoch == epoch) { srv.attached = false; srv.connPhase = "disconnected" } }
+            onUi {
+                if (srv.attachmentEpoch == epoch) {
+                    srv.attached = false
+                    srv.connPhase = if (srv.keepConnected) "reconnecting…" else "disconnected"
+                }
+            }
         }
         try {
             srv.bridge.openStdio(sessionName)
@@ -630,6 +644,7 @@ class BridgeController(private val ctx: Context) {
             val snap = snapshot.get(15, TimeUnit.SECONDS)
             val jump = srv.pendingJump
             val pane = jump?.let { (paneId, tabId) -> snap.panes.firstOrNull { it.paneId == paneId && it.tabId == tabId } }
+                ?: previousPane?.let { id -> snap.panes.firstOrNull { it.paneId == id } }
                 ?: snap.panes.firstOrNull { it.paneId == snap.focusedPaneId } ?: snap.panes.firstOrNull()
             srv.currentPaneId = pane?.paneId
             srv.currentTabId = pane?.tabId ?: snap.tabs.firstOrNull()?.tabId
@@ -642,17 +657,24 @@ class BridgeController(private val ctx: Context) {
             saveConnection(srv.conn, null)
             srv.connPhase = "live"
             srv.attached = true
-            activeKey = srv.conn.key
-            touchRecent(srv.conn.key)
+            srv.keepConnected = srv.conn.protocol == "paired"
+            srv.reconnectAttempts = 0
+            srv.reconnectAfter = 0L
+            if (!recovering) {
+                activeKey = srv.conn.key
+                touchRecent(srv.conn.key)
+            }
             subscribeNow(srv, true)
             recordSummary(srv)
             startWatcher()
-            onUi { screen = Screen.Agent }
+            if (!recovering) onUi { screen = Screen.Agent }
         } catch (e: Exception) {
             srv.attached = false
             srv.connPhase = "disconnected"
             srv.attachmentEpoch++
             srv.bridge.disconnect()
+            if (recovering) throw e
+            srv.keepConnected = false
             srv.sessionPassword = null
             servers.remove(srv.conn.key)
             recent.remove(srv.conn.key)
@@ -671,6 +693,7 @@ class BridgeController(private val ctx: Context) {
 
     fun disconnect() {
         val srv = active() ?: run { screen = Screen.Connections; return }
+        srv.keepConnected = false
         work {
             recordSummary(srv)
             srv.attachmentEpoch++
@@ -893,7 +916,11 @@ class BridgeController(private val ctx: Context) {
                 srv.snapshotWaiter.getAndSet(null)?.complete(snap)
             }
             "timeline.batch", "timeline.event", "timeline.delta" -> storeEvent(srv, frame)
-            "session.closed", "session.error" -> { srv.attached = false; srv.connPhase = "disconnected" }
+            "session.closed", "session.error" -> {
+                srv.keepConnected = false
+                srv.attached = false
+                srv.connPhase = "disconnected"
+            }
         }
     }
 
@@ -948,11 +975,52 @@ class BridgeController(private val ctx: Context) {
     private val watching = AtomicBoolean(false)
     private val pollQueued = AtomicBoolean(false)
 
+    /** Restore only the authenticated session and read subscriptions; never replay mutations. */
+    private fun reconnectNow(srv: ServerConn) {
+        if (!srv.keepConnected || srv.attached || servers[srv.conn.key] !== srv ||
+            System.nanoTime() < srv.reconnectAfter) return
+        srv.connPhase = "reconnecting…"
+        try {
+            srv.attachmentEpoch++
+            srv.bridge.disconnect()
+            val secret = srv.sessionPassword ?: passwordFor(srv.conn)
+                ?: throw PairingRequiredException("Pair this phone again from Herdr")
+            srv.bridge.connect(srv.conn.host, srv.conn.port, srv.conn.user, secret, onHostKey = { false })
+            srv.sessions = srv.bridge.sessions()
+            if (srv.sessions.none { it.name == srv.currentSession && it.reachable })
+                throw PairingRequiredException("The selected Herdr session is unavailable. Select a running session")
+            attachNow(srv, srv.currentSession, recovering = true)
+        } catch (e: Exception) {
+            srv.attachmentEpoch++
+            srv.attached = false
+            srv.bridge.disconnect()
+            val permanent = generateSequence<Throwable>(e) { it.cause }.any {
+                it is PairingRequiredException || it is java.security.cert.CertificateException || it is SecurityException
+            }
+            if (permanent) {
+                srv.keepConnected = false
+                srv.sessionPassword = null
+                srv.connPhase = "needs attention"
+                onUi { error = e.message ?: "Pair this phone again from Herdr" }
+            } else {
+                srv.reconnectAttempts++
+                val seconds = minOf(30L, 2L shl minOf(srv.reconnectAttempts - 1, 4))
+                srv.reconnectAfter = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds)
+                srv.connPhase = "waiting to reconnect…"
+            }
+        }
+    }
+
+    fun resumeConnections() {
+        servers.values.toList().filter { it.keepConnected && !it.attached }.forEach { it.reconnectAfter = 0L }
+    }
+
     fun startWatcher() {
         if (!watching.compareAndSet(false, true)) return
         watch.scheduleWithFixedDelay({
             if (!closed.get() && pollQueued.compareAndSet(false, true)) work {
                 try {
+                    servers.values.toList().filter { it.keepConnected && !it.attached }.forEach { reconnectNow(it) }
                     servers.values.toList().filter { it.attached && it.bridge.isConnected() }.forEach { srv ->
                         if (System.nanoTime() - srv.lastSnapshotPoll >= TimeUnit.SECONDS.toNanos(15)) {
                             try { sendSnapshot(srv) } catch (_: Exception) { }

@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.2.0 — In development
+## 0.2.1 — 2026-10-13
+
+Includes the pairing and navigation improvements below; 0.2.0 and 0.1.2 were
+development builds without separate public APK releases.
+
+- Paired connections send a read-only keep-alive every 20 seconds, independently
+  of terminal polling, and detect missing replies.
+- Dropped paired connections reconnect automatically with bounded backoff,
+  preserving the selected computer, session, tab, pane, and unsent drafts.
+- Revoked devices, changed certificates, and unavailable sessions stop automatic
+  retries and require attention. Reconnecting never replays a terminal command.
+- The Windows paired bridge no longer expires an authenticated idle stream after
+  60 seconds; partial frames and stalled writes remain bounded.
+
+## 0.2.0 — Included in 0.2.1
 
 - Optional paired TLS transport alongside SSH, with PC certificate pinning from
   a physical QR/address and six-digit approval inside a dedicated Herdr tab.
@@ -9,7 +23,7 @@
 - QR scanning, pending-pair cancellation, retained pairing state across rotation,
   and compatibility with existing saved SSH connections.
 
-## 0.1.2 — In development
+## 0.1.2 — Included in 0.2.1
 
 - A global tab strip includes all spaces on all connected computers, with
   computer/space labels to distinguish matching tab names.

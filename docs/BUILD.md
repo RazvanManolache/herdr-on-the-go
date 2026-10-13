@@ -4,7 +4,7 @@ Native Android client for [herdr-bridge](https://github.com/RazvanManolache/herd
 on Windows, over SSH or paired TLS. Kotlin, Jetpack Compose, and Material 3.
 No vendor account is required. [Pairing setup](PAIRING.md).
 
-Package: `io.github.razvanmanolache.herdronthego` · development version **0.2.0** (code 4) · Android 8.0+
+Package: `io.github.razvanmanolache.herdronthego` · version **0.2.1** (code 5) · Android 8.0+
 (minSdk 26; compile/target SDK 35).
 
 ## Features
@@ -144,6 +144,11 @@ for non-BMP characters), 2,000 history lines, 200,000 cached characters per pane
 48,000 attachment bytes before decoding, 256 in-memory drafts, and 128 unresolved
 actions. Timeline subscriptions request only the visible pane. Polls are coalesced;
 snapshot responses do not accumulate in a waiting queue.
+
+Paired connections send a read-only keep-alive every 20 seconds and automatically
+reconnect after a network interruption, with retry delays from two to 30 seconds.
+Recovery preserves the selected session and pane and unsent drafts; it does not
+replay commands. Revoked devices or changed certificates require attention.
 
 Rotation retains the controller and its connections. Finishing the activity closes
 all transports. Background polling is best-effort while the process remains alive;

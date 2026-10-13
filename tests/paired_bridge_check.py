@@ -71,6 +71,13 @@ with tempfile.TemporaryDirectory(prefix='herdr-paired-validation-') as temporary
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(cert, key)
+        live_sockets = []
+        wrap_socket = context.wrap_socket
+        def track_socket(*args, **kwargs):
+            connection = wrap_socket(*args, **kwargs)
+            live_sockets.append(connection)
+            return connection
+        context.wrap_socket = track_socket
         paired_server.discover_sessions = lambda: [{'name': name, 'reachable': True}]
         tls_server = paired_server.PairedServer(('127.0.0.1', 0), context, store,
             responder=BRIDGE / 'stdio-responder.py', bridge_home=home)
@@ -86,8 +93,8 @@ with tempfile.TemporaryDirectory(prefix='herdr-paired-validation-') as temporary
             '-e', 'pairedSession', name, '-e', 'pairedMarker', marker, '-e', 'pairedFixtureToken', fixture_token,
             'io.github.razvanmanolache.herdronthego.test/io.github.razvanmanolache.herdronthego.IsolatedTestRunner']
         run = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        approved = revoked = False
-        deadline = time.monotonic() + 150
+        approved = revoked = dropped = False
+        deadline = time.monotonic() + 300
         while run.poll() is None and time.monotonic() < deadline:
             read = subprocess.run([str(ADB), '-s', args.serial, 'exec-out', 'run-as',
                 'io.github.razvanmanolache.herdronthego', 'cat', 'cache/paired-test-approval.json'], capture_output=True)
@@ -101,15 +108,22 @@ with tempfile.TemporaryDirectory(prefix='herdr-paired-validation-') as temporary
                     approved = True
                 if state.get('revoke') and not revoked:
                     store.revoke(state['revoke']); revoked = True
+                if state.get('drop') and not dropped:
+                    import socket
+                    for connection in live_sockets:
+                        try: connection.shutdown(socket.SHUT_RDWR)
+                        except OSError: pass
+                    dropped = True
             time.sleep(.15)
         if run.poll() is None: run.kill()
         output = run.communicate(timeout=10)[0].decode(errors='replace')
         (report_dir / 'instrumentation.txt').write_text(output, encoding='utf-8')
         print(output)
-        assert run.returncode == 0 and 'OK (2 tests)' in output and approved and revoked, output
+        assert run.returncode == 0 and 'OK (2 tests)' in output and approved and revoked and dropped, output
         report.update(passed=True, tests=2, wrong_pin_rejected_before_pairing=True,
             phone_code_approved=True, rotation_retained=True, encrypted_credential_saved=True,
-            real_cli_send_readback=True, active_revocation=True)
+            real_cli_send_readback=True, active_revocation=True, idle_transport_70_seconds=True,
+            automatic_reconnect_preserves_tab_and_draft=True, revoked_device_stops_retries=True)
     finally:
         stop.set()
         if run and run.poll() is None: run.kill(); run.wait(timeout=5)

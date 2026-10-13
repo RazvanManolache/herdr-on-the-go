@@ -4,6 +4,12 @@ Herdr on the Go 0.2.0 adds **paired TLS** alongside SSH. Approval stays inside a
 dedicated **Pair devices** tab in Herdr. It never types a code into an agent's
 prompt and never asks for a Windows account password.
 
+Version 0.2.1 keeps paired connections active with a read-only check every 20
+seconds and reconnects after an interruption. It restores the selected tab and
+unsent drafts without resending commands. Revocation and changed certificates
+stop recovery and require attention. Background operation remains best-effort
+while Android allows the process to run; reopening the app resumes retrying.
+
 1. Install the updated optional paired bridge on the PC, following
    `docs/PAIRING.md` included in the Windows bridge package. Its default
    network port is 7443; the PC must permit inbound access from the phone.
@@ -53,5 +59,5 @@ of the real Herdr Pair devices tab, a device-request notice, hidden code input,
 absence of the code/token from terminal history, and console revocation.
 
 Physical-phone camera scanning and the work PC's actual inbound-port rules have
-not been exercised. This is a local development build; the published GitHub
-APK remains 0.1.1 until a new release is published.
+not been exercised. Download the signed APK and updated Windows bridge from
+the [v0.2.1 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.1).

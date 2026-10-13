@@ -1,5 +1,6 @@
 package io.github.razvanmanolache.herdronthego
 
+import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
@@ -7,7 +8,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.core.app.ActivityScenario
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,6 +35,12 @@ class IsolatedContext(base: Context) : ContextWrapper(base), AutoCloseable {
 
 @RunWith(AndroidJUnit4::class)
 class ControllerTest {
+    // NOTE: the app asks for POST_NOTIFICATIONS on launch — pre-grant
+    // so no system dialog covers the activity mid-test (it would stay
+    // PAUSED and compose would never settle).
+    @get:Rule
+    val notifications: GrantPermissionRule =
+        GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS)
     private val instrument = InstrumentationRegistry.getInstrumentation()
     private fun ui(block: () -> Unit) = instrument.runOnMainSync(block)
     private fun await(seconds: Int = 25, condition: () -> Boolean) {

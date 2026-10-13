@@ -1,0 +1,14 @@
+* text=auto
+*.kt text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+*.yml text eol=lf
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+*.png binary
+*.jar binary
+# Preserve upstream license text verbatim, including its trailing spaces.
+docs/licenses/*.txt whitespace=-blank-at-eol
+app/src/main/assets/NOTICE.txt whitespace=-blank-at-eol

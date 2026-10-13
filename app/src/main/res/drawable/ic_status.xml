@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- alpha-mask status icon: solid hexagon, system tints it white -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,22l26,15v30l-26,15l-26,-15v-30z" />
+</vector>

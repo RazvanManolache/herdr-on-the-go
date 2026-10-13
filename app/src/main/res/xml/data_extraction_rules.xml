@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="herdr_on_the_go_secret.xml" />
+        <exclude domain="sharedpref" path="herdr_on_the_go_secret_plain.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="herdr_on_the_go_secret.xml" />
+        <exclude domain="sharedpref" path="herdr_on_the_go_secret_plain.xml" />
+    </device-transfer>
+</data-extraction-rules>

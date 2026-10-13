@@ -17,8 +17,10 @@ evidence. Actual regression evidence is described in the repository review.
 | `terminal.png` | Terminal output, scoped draft, and 14 sp font. |
 | `font-size.png` | The same view at 18 sp, using the font controls. |
 | `computers.png` | Connected-computer switcher. |
-| `jump.png` | Unified tab picker across three computers. |
+| `jump.png` | Searchable tab picker grouped by computer and space. |
 | `search.png` | Search controls in the Sand theme. |
+| `pair-request.png` | QR/paste pairing setup with a fictional PC address and fingerprint. |
+| `pair-code.png` | Waiting for approval; `123456` is an invented code, not a live grant. |
 
 To reproduce, build and install the debug and Android-test APKs on an explicit
 emulator, then run:

@@ -42,7 +42,7 @@ class Credentials(private val ctx: Context) {
     }
 
     val available: Boolean get() = encrypted != null
-    private fun key(c: SavedConnection): String = "pw:${c.user}@${c.host}:${c.port}"
+    private fun key(c: SavedConnection): String = if (c.protocol == "paired") "device:${c.key}" else "pw:${c.user}@${c.host}:${c.port}"
 
     fun get(c: SavedConnection): String? = encrypted?.getString(key(c), null)
     fun save(c: SavedConnection, password: String) {

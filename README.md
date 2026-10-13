@@ -25,6 +25,10 @@ the most useful upgrade is a bigger font. Squinting is not a productivity featur
 [Build and setup guide](docs/BUILD.md) ·
 [License](LICENSE)
 
+The current source includes **0.2.0 device pairing** and the navigation improvements
+described below. The first published GitHub APK is 0.1.1; 0.2.0 is currently a
+local development build. [Pair without a Windows login](docs/PAIRING.md).
+
 This is an **unofficial, independent companion for [Herdr](https://herdr.dev/)**,
 not an official Herdr Android release. The app's display name is **Herdr on the Go**.
 
@@ -43,13 +47,23 @@ The `.example` computers, `demo` account, project paths, terminal messages, and
 agent states are all made up. They show the controls, rather than a connection
 to my private machines. [Screenshot provenance and reproduction](docs/images/screenshots/README.md).
 
+| Pair without a Windows login | Approve inside Herdr |
+|:---:|:---:|
+| <img src="docs/images/screenshots/pair-request.png" width="240" alt="Scan or paste the PC pairing address"> | <img src="docs/images/screenshots/pair-code.png" width="240" alt="Fictional phone code 123456 awaiting approval in the PC's Herdr tab"> |
+
 ## What it does
 
 - **Keep several computers connected.** Up to four SSH connections stay open;
   switching computers swaps the whole view, including its panes and drafts.
 - **Choose a Herdr session.** Named sessions are discovered through the bridge,
   and the selected session is remembered for reconnects.
-- **Jump straight to a tab.** One picker lists tabs across all connected computers.
+- **Pair without Windows credentials.** Scan the PC's QR code and approve the
+  phone's code in a dedicated Herdr tab. Approved phones have separate, revocable
+  device credentials. SSH is also available.
+- **Jump straight to a tab.** The tab strip includes every connected computer
+  and space. **All tabs** opens a searchable picker grouped by computer and space;
+  search a computer, space, or tab name and tap once to open it.
+  [Quick navigation guide](docs/QUICK_NAVIGATION.md).
 - **Follow terminal output.** The visible pane refreshes about every two seconds;
   workspace and agent status refresh about every 15 seconds.
 - **Send the next instruction.** Type a message, insert a UTF-8 text file into a
@@ -73,7 +87,8 @@ can contain multiple workspaces, tabs, and panes.
 You need **Android 8.0 or newer**, a Windows machine running Herdr, and the
 [Windows bridge installed for the SSH account](https://github.com/RazvanManolache/herdr-bridge#readme).
 The bridge has been verified with Herdr **0.9.3**. The app currently uses SSH
-password authentication.
+password authentication for SSH connections; development version 0.2.0 also
+supports independent device pairing as described in [the pairing guide](docs/PAIRING.md).
 
 1. Download `herdr-on-the-go-0.1.1.apk` from the
    [v0.1.1 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.1.1)

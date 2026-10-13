@@ -26,14 +26,17 @@ data class SavedConnection(
     val port: Int,
     val user: String,
     val session: String,
+    val protocol: String = "ssh",
+    val certificate: String = "",
 ) {
     /** Identity of one computer (independent of picked session). */
-    val key: String get() = "$host:$port:$user"
+    val key: String get() = if (protocol == "paired") "paired:$host:$port:$user" else "$host:$port:$user"
 }
 
 sealed class Screen {
     data object Connections : Screen()
     data class SshForm(val edit: SavedConnection?) : Screen()
+    data class PairForm(val address: String = "") : Screen()
     data object Sessions : Screen()
     data object Agent : Screen()
 }
@@ -64,7 +67,7 @@ class ServerConn(
     color: Color,
 ) {
     var conn by mutableStateOf(conn)
-    val bridge = SshBridge(hosts)
+    val bridge: BridgeConnection = if (conn.protocol == "paired") PairedBridge(conn.certificate) else SshBridge(hosts)
     var color by mutableStateOf(color)
     var hello by mutableStateOf<HelloInfo?>(null)
     var snapshot by mutableStateOf<SnapshotState?>(null)
@@ -103,6 +106,11 @@ class BridgeController(private val ctx: Context) {
     fun ctxForToast(): Context = ctx
     private val bg = Executors.newSingleThreadExecutor()
     private val fileIo = Executors.newSingleThreadExecutor()
+    private val pairIo = Executors.newSingleThreadExecutor()
+    private val pairGeneration = java.util.concurrent.atomic.AtomicLong()
+    @Volatile private var pairClient: PinnedTlsClient? = null
+    var pairing by mutableStateOf<PairProgress?>(null)
+        private set
     private val main = Handler(Looper.getMainLooper())
     private val closed = AtomicBoolean(false)
     private val prefs: SharedPreferences =
@@ -223,6 +231,35 @@ class BridgeController(private val ctx: Context) {
         recent.mapNotNull { servers[it] } +
             servers.values.filter { it.conn.key !in recent }
 
+    fun allTabs(): List<TabDestination> = liveServers().filter { it.attached }
+        .sortedWith(compareBy({ it.conn.host.lowercase() }, { it.conn.port }, { it.conn.user }))
+        .flatMap { srv ->
+        srv.snapshot?.let { snap ->
+            tabDestinations(srv.conn.key, hostLabel(srv.conn), if (srv.conn.protocol == "paired") "Paired device" else srv.conn.user,
+                srv.currentSession, snap, srv.currentPaneId)
+        }.orEmpty()
+    }
+
+    /** Recheck the captured destination: a stale picker must never switch sessions. */
+    fun openTab(tab: TabDestination): Boolean {
+        val srv = servers[tab.connection]
+        if (srv == null || !srv.attached || srv.currentSession != tab.session || !srv.bridge.isConnected()) {
+            error = "Reconnect to this computer and session to open the tab"
+            return false
+        }
+        if (srv.snapshot?.panes?.none {
+                it.paneId == tab.paneId && it.tabId == tab.tabId && it.workspaceId == tab.workspaceId
+            } != false) {
+            error = "This tab has changed or closed. Choose it again from All tabs."
+            return false
+        }
+        activeKey = tab.connection
+        touchRecent(tab.connection)
+        screen = Screen.Agent
+        selectPane(tab.paneId, tab.tabId, srv)
+        return true
+    }
+
     // ---- per-connection last-known summary ("session · ws · N agents · ago") ----
 
     private fun sumKey(c: SavedConnection) = "sum:${c.host}:${c.port}:${c.user}"
@@ -256,10 +293,13 @@ class BridgeController(private val ctx: Context) {
     // fallback so rows written by other builds still parse.
     private fun parseConn(h: String): SavedConnection? {
         val parts = h.split(CONN_SEP)
-        val p = if (parts.size == 4) parts else h.split(" ")
-        if (p.size != 4) return null
+        val p = if (parts.size in setOf(4, 6)) parts else h.split(" ")
+        if (p.size !in setOf(4, 6)) return null
+        val protocol = p.getOrNull(4) ?: "ssh"
+        if (protocol !in setOf("ssh", "paired")) return null
+        if (protocol == "paired" && p.getOrNull(5)?.matches(Regex("[a-f0-9]{64}")) != true) return null
         return SavedConnection(
-            p[0], p[1].toIntOrNull() ?: 22, p[2], p[3])
+            p[0], p[1].toIntOrNull() ?: 22, p[2], p[3], protocol, p.getOrNull(5) ?: "")
     }
 
     fun savedConnections(): List<SavedConnection> {
@@ -278,7 +318,7 @@ class BridgeController(private val ctx: Context) {
         val editor = prefs.edit().putInt("conns_n", list.size)
         list.forEachIndexed { i, s ->
             editor.putString(
-                "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session)
+                "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session, s.protocol, s.certificate)
                     .joinToString(CONN_SEP))
         }
         check(editor.commit()) { "Could not save the selected connection/session" }
@@ -300,7 +340,7 @@ class BridgeController(private val ctx: Context) {
             val editor = prefs.edit().putInt("conns_n", list.size)
             list.forEachIndexed { i, s ->
                 editor.putString(
-                    "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session)
+                    "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session, s.protocol, s.certificate)
                         .joinToString(CONN_SEP))
             }
             editor.remove("conn_${list.size}")
@@ -393,6 +433,78 @@ class BridgeController(private val ctx: Context) {
     private var notificationJump: Triple<String, String, String>? = null
     private var verifyingAddress = ""
 
+    fun cancelPairing() {
+        pairGeneration.incrementAndGet()
+        pairClient?.close()
+        pairing = null
+    }
+
+    fun pairDevice(addressText: String, deviceName: String) {
+        if (pairing != null) return
+        val address = try { PairAddress.parse(addressText) }
+            catch (e: Exception) { error = e.message ?: "Invalid pairing address"; return }
+        if (!canSavePasswords) { error = "Secure storage must be working before pairing a device"; return }
+        if (servers.size >= MAX_LIVE) { error = "Disconnect a computer before pairing another"; return }
+        if (deviceName.isBlank() || deviceName.length > 64) { error = "Enter a short device name"; return }
+        val epoch = pairGeneration.incrementAndGet()
+        pairing = PairProgress(address.host, "", System.currentTimeMillis() + 180000)
+        error = null
+        pairIo.execute {
+            val bytes = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+            val secret = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+            val client = PinnedTlsClient(address)
+            pairClient = client
+            var requestId: String? = null
+            var retained = false
+            try {
+                if (epoch != pairGeneration.get() || closed.get()) throw IOException("Pairing cancelled")
+                val start = client.request(JSONObject().put("op", "pair.start").put("name", deviceName).put("secret", secret))
+                requestId = start.getString("requestId")
+                val code = start.getString("code")
+                require(code.matches(Regex("[0-9]{6}")) && requestId.matches(Regex("[a-f0-9]{32}"))) { "Invalid pairing response" }
+                val expires = System.currentTimeMillis() + start.getInt("expiresIn").coerceIn(1, 180) * 1000L
+                onUi { if (epoch == pairGeneration.get()) pairing = PairProgress(address.host, code, expires) }
+                while (epoch == pairGeneration.get() && !closed.get() && System.currentTimeMillis() < expires) {
+                    Thread.sleep(1000)
+                    val result = client.request(JSONObject().put("op", "pair.status").put("requestId", requestId).put("secret", secret))
+                    when (result.getString("status")) {
+                        "approved" -> {
+                            val deviceId = result.getString("deviceId")
+                            require(deviceId == requestId) { "Pairing identity mismatch" }
+                            val connection = SavedConnection(address.host, address.port, deviceId, "default", "paired", address.fingerprint)
+                            val saved = CompletableFuture<Boolean>()
+                            onUi {
+                                try {
+                                    check(epoch == pairGeneration.get()) { "Pairing cancelled" }
+                                    saveConnection(connection, secret)
+                                    pairing = null
+                                    connect(connection, secret, { false })
+                                    saved.complete(true)
+                                } catch (e: Exception) { saved.completeExceptionally(e) }
+                            }
+                            retained = saved.get(10, TimeUnit.SECONDS)
+                            break
+                        }
+                        "pending" -> Unit
+                        else -> throw IOException("Pairing was denied or expired. Reopen Pair devices in Herdr to try again")
+                    }
+                }
+                if (!retained && epoch == pairGeneration.get()) throw IOException("Pairing expired. Try again from Herdr")
+            } catch (e: Exception) {
+                onUi { if (epoch == pairGeneration.get()) { pairing = null; error = e.cause?.message ?: e.message ?: "Pairing failed" } }
+            } finally {
+                client.close()
+                if (pairClient === client) pairClient = null
+                if (!retained && requestId != null && !closed.get()) {
+                    try {
+                        PinnedTlsClient(address).use { it.request(JSONObject().put("op", "pair.cancel")
+                            .put("requestId", requestId).put("secret", secret)) }
+                    } catch (_: Exception) { /* Unreachable pending requests expire on the PC. */ }
+                }
+            }
+        }
+    }
+
     fun connect(c: SavedConnection, password: String, onHostKey: (String) -> Boolean,
                 rememberPassword: Boolean = true) {
         busy = "Connecting…"
@@ -456,6 +568,7 @@ class BridgeController(private val ctx: Context) {
         val srv = servers[c.key]
         if (srv?.attached == true && srv.bridge.isConnected()) activate(c.key)
         else if (password != null) connect(c, password, onHostKey)
+        else if (c.protocol == "paired") screen = Screen.PairForm("herdr-pair://${c.host}:${c.port}?fingerprint=${c.certificate}")
         else screen = Screen.SshForm(c)
     }
 
@@ -470,7 +583,7 @@ class BridgeController(private val ctx: Context) {
         require(SshBridge.validSession(sessionName)) { "Select a running session" }
         if (!srv.bridge.isConnected()) {
             val password = srv.sessionPassword ?: passwordFor(srv.conn)
-                ?: throw IOException("Enter your SSH password again")
+                ?: throw IOException(if (srv.conn.protocol == "paired") "Pair this phone again from Herdr" else "Enter your SSH password again")
             connectNow(srv.conn.copy(session = sessionName), password, { askHostKey(it) }, srv.rememberPassword)
         }
         AgentNotif.cancelServer(ctx, srv)
@@ -511,7 +624,7 @@ class BridgeController(private val ctx: Context) {
         }
         try {
             srv.bridge.openStdio(sessionName)
-            srv.bridge.send("hello", sessionName, JSONObject().put("clientName", "herdr-on-the-go").put("clientVersion", "0.1.1"))
+            srv.bridge.send("hello", sessionName, JSONObject().put("clientName", "herdr-on-the-go").put("clientVersion", BuildConfig.VERSION_NAME))
             srv.hello = hello.get(15, TimeUnit.SECONDS)
             sendSnapshot(srv)
             val snap = snapshot.get(15, TimeUnit.SECONDS)
@@ -610,7 +723,8 @@ class BridgeController(private val ctx: Context) {
         if (!SshBridge.validSession(desired.session)) return
         notificationJump = Triple(key, paneId, tabId)
         val password = passwordFor(desired)
-        if (password == null) screen = Screen.SshForm(desired)
+        if (password == null) screen = if (desired.protocol == "paired")
+            Screen.PairForm("herdr-pair://${desired.host}:${desired.port}?fingerprint=${desired.certificate}") else Screen.SshForm(desired)
         else connect(desired, password, { askHostKey(it) })
     }
 
@@ -858,6 +972,8 @@ class BridgeController(private val ctx: Context) {
     fun shutdown() {
         if (!closed.compareAndSet(false, true)) return
         hostKeyAnswer.getAndSet(null)?.offer(false)
+        cancelPairing()
+        pairIo.shutdownNow()
         watch.shutdownNow()
         // Disconnect every transport before cancelling workers waiting for replies.
         servers.values.toList().forEach { srv ->

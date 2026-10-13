@@ -60,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,6 +106,7 @@ fun HerdrOnTheGoApp(c: BridgeController) {
                 when (val s = c.screen) {
                     is Screen.Connections -> ConnectionsScreen(c)
                     is Screen.SshForm -> SshFormScreen(c, s.edit)
+                    is Screen.PairForm -> PairScreen(c, s.address)
                     is Screen.Sessions -> SessionsScreen(c)
                     is Screen.Agent -> AgentScreen(c)
                 }
@@ -227,7 +229,7 @@ fun ConnectionsScreen(c: BridgeController) {
     // NOTE: edge-to-edge (targetSdk 35) draws under the status and
     // gesture bars — pad both so header buttons stay tappable.
     Column(Modifier.fillMaxSize().statusBarsPadding()
-        .navigationBarsPadding().padding(16.dp)) {
+        .navigationBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Herdr on the Go", style = MaterialTheme.typography.headlineSmall,
@@ -263,7 +265,7 @@ fun ConnectionsScreen(c: BridgeController) {
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis)
-                        Text("${s.user} · " +
+                        Text("${if (s.protocol == "paired") "Paired device" else s.user} · " +
                             (c.summaryFor(s) ?: "session · ${s.session}"),
                             color = t.dim, fontSize = 13.sp,
                             maxLines = 1,
@@ -284,7 +286,13 @@ fun ConnectionsScreen(c: BridgeController) {
             Text("+  New SSH connection", fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(8.dp))
-        Text("Saved passwords use device secure storage · v0.1.1", color = t.dim)
+        Button(onClick = { c.screen = Screen.PairForm() },
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = t.accent, contentColor = t.onAccent)) {
+            Text("+  Pair without Windows login", fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Saved credentials use device secure storage · v${BuildConfig.VERSION_NAME}", color = t.dim)
         c.credentialNotice?.let { Text(it, color = t.warn) }
         if (c.pendingActions.isNotEmpty()) TextButton(onClick = { c.reviewPending() }) {
             Text("Review ${c.pendingActions.size} unresolved actions")
@@ -403,6 +411,7 @@ fun AgentScreen(c: BridgeController) {
     var tabJump by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
 
+    val destinations = c.allTabs()
     val tabList = snap?.tabs ?: emptyList()
     val currentTab = tabList.firstOrNull { it.tabId == c.currentTabId }
         ?: tabList.firstOrNull()
@@ -430,7 +439,7 @@ fun AgentScreen(c: BridgeController) {
             }
             TextButton(onClick = { showSpaces = true }, modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Text(snap?.workspaces?.firstOrNull { it.focused }?.label
+                Text(snap?.workspaces?.firstOrNull { it.workspaceId == currentTab?.workspaceId }?.label
                     ?: "…", color = t.text, fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(" ▾", color = t.text, fontSize = 15.sp)
@@ -453,48 +462,43 @@ fun AgentScreen(c: BridgeController) {
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 4.dp))
         }
-        // tab chips with status dots, end fade, and a jump count
+        // All connected computers and spaces stay one tap away.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 4.dp)) {
-            tabList.forEach { tab ->
-                val sel = tab.tabId == currentTab?.tabId
-                val status = snap?.panes?.firstOrNull { it.tabId == tab.tabId }?.status
-                    ?: tabList.firstOrNull { it.tabId == tab.tabId }
-                        ?.let { snap?.agents?.firstOrNull { a -> a.tabId == it.tabId }?.status }
-                    ?: "unknown"
-                Row(
-                    Modifier.padding(end = 2.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (sel) t.accent else t.surface)
-                        .clickable {
-                            val pane = snap?.panes?.firstOrNull { it.tabId == tab.tabId }
-                                ?: return@clickable
-                            c.selectPane(pane.paneId, tab.tabId)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    destinations.forEach { tab ->
+                        val selected = c.isActive(tab.connection) && tab.tabId == c.currentTabId
+                        Column(Modifier.padding(end = 4.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected) t.accent else t.surface)
+                            .clickable { c.openTab(tab) }
+                            .heightIn(min = 48.dp).width(150.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(6.dp).clip(CircleShape)
+                                    .background(statusColor(t, tab.status)))
+                                Spacer(Modifier.width(6.dp))
+                                Text(tab.label, fontSize = 13.sp, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (selected) t.onAccent else t.text,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                            }
+                            Text(tab.context, fontSize = 10.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (selected) t.onAccent else t.dim)
                         }
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(6.dp).clip(CircleShape)
-                        .background(statusColor(t, status)))
-                    Spacer(Modifier.width(6.dp))
-                    Text(tab.label, fontSize = 13.sp,
-                        color = if (sel) t.onAccent else t.dim,
-                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                    }
                 }
-            }
-            }
-            Box(Modifier.align(Alignment.CenterEnd).width(28.dp).height(34.dp)
-                .background(Brush.horizontalGradient(
-                    listOf(t.bg.copy(alpha = 0f), t.bg))))
+                Box(Modifier.align(Alignment.CenterEnd).width(16.dp).height(48.dp)
+                    .background(Brush.horizontalGradient(listOf(t.bg.copy(alpha = 0f), t.bg))))
             }
             TextButton(onClick = { tabJump = true },
-                contentPadding = PaddingValues(horizontal = 4.dp)) {
-                // NOTE: unified count across every live computer, like
-                // the jump dialog it opens — not just this server.
-                val jumpCount = c.liveServers()
-                    .sumOf { it.snapshot?.tabs?.size ?: 0 }
-                Text("▾$jumpCount", color = t.dim, fontSize = 13.sp)
+                contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("All tabs", color = t.accent, fontSize = 13.sp)
+                    Text("${destinations.size} ▾", color = t.dim, fontSize = 12.sp)
+                }
             }
         }
         if (currentPane != null && target != null) {
@@ -567,6 +571,15 @@ fun ChatDetail(
     var matchPos by remember(query, target) { mutableStateOf(0) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    // NOTE: jump-to-latest pill shows only when scrolled up.
+    val atBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            total == 0 ||
+                info.visibleItemsInfo.lastOrNull()?.index == total - 1
+        }
+    }
 
     LaunchedEffect(matchPos, matches) {
         matches.getOrNull(matchPos)?.let { listState.scrollToItem(it) }
@@ -658,12 +671,14 @@ fun ChatDetail(
             }
         } else {
             val matchSet = matches.toSet()
-            // NOTE: weight sits directly on the LazyColumn (a direct
-            // child of this Column). A wrapping container lets the list
-            // size to all lines and shoves the input row off screen;
-            // per-message selection keeps text selectable instead.
+            // NOTE: the weight stays on this Box (the exact slot the
+            // LazyColumn had) so the list still takes only the
+            // remaining space — an unweighted wrapper would shove the
+            // input row off screen; per-message selection keeps text
+            // selectable instead.
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth()) {
+                modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(lines) { i, line ->
                     SelectionContainer {
                         val ann = buildAnnotatedString {
@@ -695,6 +710,24 @@ fun ChatDetail(
                                 .padding(horizontal = 4.dp))
                         }
                     }
+                }
+                // NOTE: jump-to-latest shows only when scrolled up, so
+                // reading history is never yanked by new arrivals.
+                if (!atBottom) {
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                listState.animateScrollToItem(lines.size - 1)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .clip(CircleShape)
+                            .background(t.surface2)) {
+                        Icon(Icons.Filled.KeyboardArrowDown, "latest",
+                            tint = t.accent)
+                    }
+                }
                 }
             TextButton(enabled = c.canLoadEarlier(paneId), onClick = { c.loadEarlier(paneId, lines.size) }) {
                 Text(if (c.canLoadEarlier(paneId)) "↑ Load earlier" else "History limit: 2,000 lines", color = t.accent)
@@ -808,7 +841,9 @@ fun SpacesDialog(c: BridgeController, onClose: () -> Unit) {
                                 onLongClick = { confirm = w })
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(c, w.label, w.focused, size = 28.dp)
+                        Avatar(c, w.label, c.snapshot?.tabs?.firstOrNull {
+                            it.tabId == c.currentTabId
+                        }?.workspaceId == w.workspaceId, size = 28.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(w.label, color = t.text, fontWeight = FontWeight.SemiBold)
@@ -969,56 +1004,12 @@ fun ServersDialog(c: BridgeController, onClose: () -> Unit) {
         })
 }
 
-// ---------- unified jump (every tab on every live computer) ----------
+// ---------- unified jump ----------
 
 @Composable
 fun JumpDialog(c: BridgeController, onClose: () -> Unit) {
-    val t = c.theme
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("Jump to tab") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                c.liveServers().forEach { srv ->
-                    val snap = srv.snapshot ?: return@forEach
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 8.dp)) {
-                        Box(Modifier.size(8.dp).clip(CircleShape)
-                            .background(srv.color))
-                        Spacer(Modifier.width(8.dp))
-                        Text(c.hostLabel(srv.conn), color = t.dim,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
-                    }
-                    snap.tabs.forEach { tab ->
-                        val status = snap.panes
-                            .firstOrNull { it.tabId == tab.tabId }?.status
-                            ?: snap.agents
-                                .firstOrNull { a -> a.tabId == tab.tabId }?.status
-                            ?: "unknown"
-                        val sel = c.isActive(srv.conn.key) &&
-                            tab.tabId == srv.currentTabId
-                        TextButton(onClick = {
-                            val pane = snap.panes
-                                .firstOrNull { it.tabId == tab.tabId }
-                                ?: return@TextButton
-                            c.jumpTo(srv.conn.key, pane.paneId, tab.tabId)
-                            onClose()
-                        }) {
-                            Box(Modifier.size(8.dp).clip(CircleShape)
-                                .background(statusColor(t, status)))
-                            Spacer(Modifier.width(8.dp))
-                            Text(tab.label,
-                                color = if (sel) t.accent else t.text,
-                                fontWeight = if (sel) FontWeight.Bold
-                                else FontWeight.Normal)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("CLOSE") } })
+    TabNavigator(c.allTabs(), c.activeKey, c.currentSession, c.currentTabId, c.theme,
+        onSelect = { if (c.openTab(it)) onClose() }, onClose = onClose)
 }
 
 @Composable

@@ -18,10 +18,10 @@ import java.util.concurrent.atomic.AtomicLong
 data class Frame(val id: String, val type: String, val sessionId: String,
                  val seq: Long?, val payload: JSONObject)
 
-class SshBridge(private val hosts: KnownHostsStore) {
+class SshBridge(private val hosts: KnownHostsStore) : BridgeConnection {
     @Volatile private var session: Session? = null
-    @Volatile var onFrame: ((Frame) -> Unit)? = null
-    @Volatile var onDisconnect: (() -> Unit)? = null
+    @Volatile override var onFrame: ((Frame) -> Unit)? = null
+    @Volatile override var onDisconnect: (() -> Unit)? = null
     @Volatile private var stdioChannel: ChannelExec? = null
     @Volatile private var stdioOut: OutputStreamWriter? = null
     @Volatile private var reader: Thread? = null
@@ -31,8 +31,8 @@ class SshBridge(private val hosts: KnownHostsStore) {
 
     fun nextId(): String = "c-${System.currentTimeMillis()}-${reqSeq.incrementAndGet()}"
 
-    fun connect(host: String, port: Int, user: String, password: String,
-                timeoutMs: Int = 15000, onHostKey: (String) -> Boolean): Session {
+    override fun connect(host: String, port: Int, user: String, password: String,
+                timeoutMs: Int, onHostKey: (String) -> Boolean): Session {
         require(host.isNotBlank() && user.isNotBlank() && port in 1..65535) { "Invalid SSH address or user" }
         disconnect()
         val token = generation.get()
@@ -57,9 +57,9 @@ class SshBridge(private val hosts: KnownHostsStore) {
         }
     }
 
-    fun isConnected(): Boolean = session?.isConnected == true
+    override fun isConnected(): Boolean = session?.isConnected == true
 
-    fun closeStdio() {
+    override fun closeStdio() {
         generation.incrementAndGet()
         val oldChannel = stdioChannel
         val oldWriter = stdioOut
@@ -75,7 +75,7 @@ class SshBridge(private val hosts: KnownHostsStore) {
         }
     }
 
-    fun disconnect() {
+    override fun disconnect() {
         generation.incrementAndGet()
         val old = session
         session = null
@@ -117,10 +117,10 @@ class SshBridge(private val hosts: KnownHostsStore) {
         } finally { ch.disconnect() }
     }
 
-    fun bridgePresent(): Boolean = execOnce("[ -x ~/.local/bin/herdr-mobile-bridge ] && echo OK || echo NO").trim() == "OK"
-    fun bridgeVersion(): String = execOnce("~/.local/bin/herdr-mobile-bridge --version").trim()
+    override fun bridgePresent(): Boolean = execOnce("[ -x ~/.local/bin/herdr-mobile-bridge ] && echo OK || echo NO").trim() == "OK"
+    override fun bridgeVersion(): String = execOnce("~/.local/bin/herdr-mobile-bridge --version").trim()
 
-    fun sessions(): List<BridgeSession> {
+    override fun sessions(): List<BridgeSession> {
         val array = JSONArray(execOnce("~/.local/bin/herdr-mobile-bridge sessions --json").trim())
         require(array.length() <= 32) { "Too many server sessions" }
         return (0 until array.length()).map { i ->
@@ -131,9 +131,9 @@ class SshBridge(private val hosts: KnownHostsStore) {
         }
     }
 
-    fun socketAlive(): Boolean = execOnce("[ -S ~/.config/herdr/herdr.sock ] && echo OK || echo NO").trim() == "OK"
+    override fun socketAlive(): Boolean = execOnce("[ -S ~/.config/herdr/herdr.sock ] && echo OK || echo NO").trim() == "OK"
 
-    fun openStdio(sessionName: String) {
+    override fun openStdio(sessionName: String) {
         require(validSession(sessionName)) { "Invalid session name" }
         closeStdio()
         val s = session ?: throw IOException("Not connected")
@@ -176,7 +176,7 @@ class SshBridge(private val hosts: KnownHostsStore) {
         }, "herdr-stdio-reader").also { it.isDaemon = true; it.start() }
     }
 
-    @Synchronized fun send(type: String, sessionId: String, payload: JSONObject): String =
+    @Synchronized override fun send(type: String, sessionId: String, payload: JSONObject): String =
         nextId().also { sendRaw(it, type, sessionId, payload) }
 
     @Synchronized fun sendRaw(id: String, type: String, sessionId: String, payload: JSONObject) {
@@ -188,8 +188,8 @@ class SshBridge(private val hosts: KnownHostsStore) {
         out.flush()
     }
 
-    fun request(type: String, sessionId: String, payload: JSONObject, expected: String,
-                timeoutMs: Long = 30000): Frame {
+    override fun request(type: String, sessionId: String, payload: JSONObject, expected: String,
+                timeoutMs: Long): Frame {
         val id = nextId()
         val future = replies.register(id, setOf(expected))
         try {

@@ -227,6 +227,29 @@ class ControllerTest {
                 assertNull(c.error)
                 held.add(c.active()!!)
                 assertEquals(2, c.servers.size)
+                ui { c.attach(session) }
+                await { c.busy == null && c.active()?.attached == true }
+                assertNull(c.error)
+                // All spaces and both SSH identities appear, even though their opaque IDs overlap.
+                val destinations = c.allTabs()
+                assertEquals(setOf(conn.key, second.key), destinations.map { it.connection }.toSet())
+                val firstComputerTabs = destinations.filter { it.connection == conn.key }
+                assertTrue(firstComputerTabs.map { it.workspaceId }.toSet().size >= 2)
+                val otherSpace = firstComputerTabs.first { it.workspaceId != c.snapshot!!.panes.first { p -> p.paneId == target.id }.workspaceId }
+                ui { assertTrue(c.openTab(otherSpace)) }
+                assertEquals(conn.key, c.activeKey)
+                assertEquals(otherSpace.tabId, c.currentTabId)
+                assertEquals(otherSpace.paneId, c.currentPaneId)
+                await { c.paneText.containsKey(otherSpace.paneId) }
+                val secondComputerTab = destinations.first { it.connection == second.key }
+                ui { assertTrue(c.openTab(secondComputerTab)) }
+                assertEquals(second.key, c.activeKey)
+                assertEquals(secondComputerTab.paneId, c.currentPaneId)
+                // A stale picker cannot attach another session or silently redirect a destination.
+                ui { assertFalse(c.openTab(otherSpace.copy(session = "different-session"))) }
+                assertEquals(second.key, c.activeKey)
+                assertEquals(session, c.currentSession)
+                ui { c.error = null }
                 repeat(5) { index ->
                     ui { c.connect(conn.copy(user = "reject-$index"), "synthetic-test-password", { true }, false) }
                     await { c.busy == null }

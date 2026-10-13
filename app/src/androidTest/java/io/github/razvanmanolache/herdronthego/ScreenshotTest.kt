@@ -32,7 +32,7 @@ class ScreenshotTest {
         val conn = SavedConnection(host, 22, "demo", session)
         c.saveConnection(conn, null)
         val panes = labels.mapIndexed { i, label ->
-            PaneEntry("$host-pane-$i", "$host-tab-$i", "$host-space", "demo-agent",
+            PaneEntry("$host-pane-$i", "$host-tab-$i", if (i >= 2) "$host-lab" else "$host-space", "demo-agent",
                 if (i == 1) "working" else "idle", i == 0, "C:\\Projects\\demo-dashboard", label, 42)
         }
         return ServerConn(conn, pins, color).also { srv ->
@@ -46,7 +46,11 @@ class ScreenshotTest {
             srv.snapshot = SnapshotState("0.9.3", 22,
                 panes.map { AgentEntry(it.paneId, it.tabId, it.workspaceId, it.agent, it.status, it.focused, it.cwd, it.title, it.revision) },
                 panes, panes.mapIndexed { i, p -> TabEntry(p.tabId, p.workspaceId, labels[i], i + 1, i == 0, 1) },
-                listOf(WorkspaceEntry("$host-space", "Demo dashboard", 1, true, panes.size, panes.size, panes.first().tabId, "idle")),
+                panes.groupBy { it.workspaceId }.entries.mapIndexed { i, (id, members) ->
+                    WorkspaceEntry(id, if (i > 0) "Sandbox" else when(host) {
+                        "desk.example" -> "Client work"; "laptop.example" -> "Weekend project"; else -> "Build queue"
+                    }, i + 1, i == 0, members.size, members.size, members.first().tabId, "idle")
+                },
                 "$host-space", panes.first().tabId, panes.first().paneId)
             srv.paneText[panes.first().paneId] = """
                 PS C:\Projects\demo-dashboard>
@@ -83,7 +87,7 @@ class ScreenshotTest {
                 c.activeKey = desk.conn.key
                 c.setDraft(CommandTarget(desk.conn.key, desk.currentSession, desk.currentPaneId!!), "Summarize the changes before I commit.")
             }
-            for (mode in listOf("connections", "sessions", "terminal", "font-size", "computers", "jump", "search")) {
+            for (mode in listOf("connections", "sessions", "terminal", "font-size", "computers", "jump", "search", "pair-request", "pair-code")) {
                 scenario.onActivity { activity ->
                     c.setTheme(if (mode == "search") "sand" else "graphite")
                     c.setFont(if (mode == "font-size") 18f else 14f)
@@ -97,6 +101,8 @@ class ScreenshotTest {
                                         "terminal", "font-size" -> AgentScreen(c)
                                         "computers" -> { AgentScreen(c); ServersDialog(c) {} }
                                         "jump" -> { AgentScreen(c); JumpDialog(c) {} }
+                                        "pair-request" -> PairScreen(c, "herdr-pair://desk.example:7443?fingerprint=${"a".repeat(64)}")
+                                        "pair-code" -> PairScreen(c, "", PairProgress("desk.example", "123456", System.currentTimeMillis() + 180000))
                                         "search" -> {
                                             val pane = desk.snapshot!!.panes.first()
                                             val target = CommandTarget(desk.conn.key, desk.currentSession, pane.paneId)
@@ -110,7 +116,7 @@ class ScreenshotTest {
                     }
                 }
                 instrument.waitForIdleSync()
-                Thread.sleep(800) // Capture after Compose layout and dialog animations settle.
+                Thread.sleep(2000) // Allow software-rendered emulator frames and dialog animations to settle.
                 val bitmap = instrument.uiAutomation.takeScreenshot()
                 val folder = File(instrument.targetContext.cacheDir, "public-screenshots").also { it.mkdirs() }
                 FileOutputStream(File(folder, "$mode.png")).use {

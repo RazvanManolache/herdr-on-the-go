@@ -186,6 +186,9 @@ with tempfile.TemporaryDirectory(prefix='herdr-on-the-go-validation-') as cwd:
         create = run_cli(['--session', name, 'workspace', 'create', '--cwd', cwd,
                           '--label', 'Android verification', '--no-focus'])
         assert create.returncode == 0, create.stderr
+        other = run_cli(['--session', name, 'workspace', 'create', '--cwd', cwd,
+                         '--label', 'Other verification space', '--no-focus'])
+        assert other.returncode == 0, other.stderr
         poller.refresh()
         threading.Thread(target=serve, daemon=True).start()
         for apk in (ROOT / 'app/build/outputs/apk/debug/app-debug.apk',
@@ -206,7 +209,8 @@ with tempfile.TemporaryDirectory(prefix='herdr-on-the-go-validation-') as cwd:
         time.sleep(.5)
         assert not any(t.is_active() for t in transports), 'Client leaked a live SSH transport'
         report.update(passed=True, tests=int(re.search(r'OK \((\d+) tests?\)', run.stdout)[1]),
-                      lost_reply_retry_same_key=True, transports_closed=True, mutation_count=len(mutations))
+                      lost_reply_retry_same_key=True, transports_closed=True,
+                      cross_computer_space_navigation=True, mutation_count=len(mutations))
     finally:
         stop.set()
         listener.close()

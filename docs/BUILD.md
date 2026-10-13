@@ -1,17 +1,18 @@
 # Build, setup, and safety guide
 
-Native Android SSH client for [herdr-bridge](https://github.com/RazvanManolache/herdr-bridge)
-on Windows. Kotlin, Jetpack Compose, and Material 3. No vendor account or pairing
-service is required.
+Native Android client for [herdr-bridge](https://github.com/RazvanManolache/herdr-bridge)
+on Windows, over SSH or paired TLS. Kotlin, Jetpack Compose, and Material 3.
+No vendor account is required. [Pairing setup](PAIRING.md).
 
-Package: `io.github.razvanmanolache.herdronthego` · version **0.1.1** (code 2) · Android 8.0+
+Package: `io.github.razvanmanolache.herdronthego` · development version **0.2.0** (code 4) · Android 8.0+
 (minSdk 26; compile/target SDK 35).
 
 ## Features
 
 - Saved SSH connections and up to four connected computers, with separate panes,
   terminal history, and message drafts for each computer and Herdr session.
-- Session selection, workspace/tab switching, terminal search, selectable text,
+- Session selection, a global tab strip and searchable **All tabs** picker across
+  computers and spaces, terminal search, selectable text,
   font size (10–24 sp), themes, and commands extracted from terminal output.
 - Automatic refresh: visible terminal output about every two seconds; snapshots
   and agent status about every 15 seconds while the process is running.

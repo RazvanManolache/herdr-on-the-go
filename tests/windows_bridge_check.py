@@ -1,4 +1,4 @@
-"""Android emulator -> synthetic SSH -> installed Windows bridge -> disposable Herdr.
+"""Android emulator -> synthetic SSH -> source Windows bridge -> disposable Herdr.
 
 Requires: built debug + androidTest APKs, running emulator, paramiko, installed
 Windows herdr-bridge. Uses no real passwords/accounts/panes. Never targets phones.
@@ -59,7 +59,10 @@ def execute(channel, command):
             f"~/.local/bin/herdr-mobile-bridge stdio --session '{name}'")
         if not allowed:
             raise RuntimeError('Unexpected fixture command')
-        proc = subprocess.Popen([str(wrapper), '-c', command], stdin=subprocess.PIPE,
+        # Exercise the release source without updating the user's running bridge.
+        child_command = ([sys.executable, '-E', '-s', '-u', str(BRIDGE / 'stdio-responder.py'),
+                          'stdio', '--session', name] if ' stdio ' in command else [str(wrapper), '-c', command])
+        proc = subprocess.Popen(child_command, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                 creationflags=subprocess.CREATE_NO_WINDOW)
         children.append(proc)
@@ -87,7 +90,7 @@ def execute(channel, command):
                             mutations.append({'key': obj['payload']['idempotencyKey'],
                                               'drop': 'DROP_ONCE_' in obj['payload']['text']})
                         if obj['type'] == 'raw.read':
-                            assert 1 <= obj['payload']['lines'] <= 2000
+                            assert obj['payload']['lines'] >= 1
                         if obj['type'] == 'timeline.subscribe':
                             assert len(obj['payload']['paneIds']) <= 64
                         proc.stdin.write(line + b'\n')

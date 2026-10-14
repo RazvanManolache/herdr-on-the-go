@@ -5,7 +5,7 @@ rendered by `ScreenshotTest.capturePublicDocumentation`. The fixture uses an
 isolated test application and entirely fictional state. It makes no SSH
 connections and never reads saved user credentials or real terminal output.
 
-Refreshed for **0.2.2** on 2026-10-14. Colored terminal output uses synthetic
+Refreshed for **0.2.3** on 2026-10-15. Colored terminal output uses synthetic
 ANSI styles rendered by the app's normal parser. The fitting screenshot opens
 the real **⋯** menu; it does not create a live desktop split or pairing grant.
 
@@ -17,7 +17,7 @@ evidence. Actual regression evidence is described in the repository review.
 | File | View |
 | --- | --- |
 | `connections.png` | Three saved demo computers. |
-| `sessions.png` | Reachable named sessions. |
+| `sessions.png` | Reachable named sessions, Connect, and Cancel. |
 | `terminal.png` | Colored terminal output, scoped draft, and 14 sp font. |
 | `font-size.png` | The same view at 18 sp, using the font controls. |
 | `computers.png` | Connected-computer switcher. |
@@ -26,6 +26,7 @@ evidence. Actual regression evidence is described in the repository review.
 | `pair-request.png` | QR/paste pairing setup with a fictional PC address and fingerprint. |
 | `pair-code.png` | Waiting for approval; `123456` is an invented code, not a live grant. |
 | `fit-menu.png` | Message options, including the real **Fit width** toggle. |
+| `sidebar.png` | Computer sidebar with fictional computers and Manage connections. |
 
 To reproduce, build and install the debug and Android-test APKs on an explicit
 emulator, then run:

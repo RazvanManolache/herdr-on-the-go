@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 — 2026-10-15
+
+- A **☰** sidebar in the chat header switches between connected computers and
+  opens **Manage connections** without closing the current connection.
+- **Cancel** in the session picker tears down an unattached attempt and returns
+  to saved connections.
 
 - History pages back without a line cap: Load earlier keeps
   fetching in thousand-line pages and the per-pane cache holds
   the latest two million characters. The bridge accepts any
-  positive line count and its replies clear a larger frame.
+  positive line count; bridge 0.3.3 allows larger history replies while retaining
+  the small request limit. Available scrollback and reply sizes remain bounded.
+- Eleven refreshed fictional-data screenshots, including the sidebar and session Cancel.
 
 ## 0.2.2 — 2026-10-14
 

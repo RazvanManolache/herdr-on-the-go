@@ -20,15 +20,15 @@ This project is released under **GPLv3**.
 I also added **A− / A+ font controls** because I'm getting older, and sometimes
 the most useful upgrade is a bigger font. Squinting is not a productivity feature.
 
-[Download APK v0.2.2](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.2) ·
+[Download APK v0.2.3](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.3) ·
 [Windows bridge](https://github.com/RazvanManolache/herdr-bridge) ·
 [Build and setup guide](docs/BUILD.md) ·
 [License](LICENSE)
 
-Version **0.2.2** adds readable terminal colors, a new app icon, and a way to
-fit the agent's output to your phone. Switching tabs or computers restores the
-desktop layout, as does leaving the app. Install over 0.2.1 to keep your saved
-connections and pairings. [Pair without a Windows login](docs/PAIRING.md).
+Version **0.2.3** adds a computer sidebar, Cancel in the session picker, and
+deeper terminal history. **Load earlier** keeps requesting another 1,000 lines
+instead of stopping at 2,000. Install over 0.2.2 to keep your saved connections
+and pairings. [Pair without a Windows login](docs/PAIRING.md).
 
 This is an **unofficial, independent companion for [Herdr](https://herdr.dev/)**,
 not an official Herdr Android release. The app's display name is **Herdr on the Go**.
@@ -56,8 +56,10 @@ to my private machines. [Screenshot provenance and reproduction](docs/images/scr
 
 - **Keep several computers connected.** Up to four connections stay open;
   switching computers swaps the whole view, including its panes and drafts.
+  Open **☰** in the chat header to switch computers or manage connections.
 - **Choose a Herdr session.** Named sessions are discovered through the bridge,
-  and the selected session is remembered for reconnects.
+  and the selected session is remembered for reconnects. **Cancel** leaves the
+  picker and closes the unattached connection attempt, keeping the saved entry.
 - **Pair without Windows credentials.** Scan the PC's QR code and approve the
   phone's code in a dedicated Herdr tab. Approved phones have separate, revocable
   device credentials. SSH is also available.
@@ -67,6 +69,9 @@ to my private machines. [Screenshot provenance and reproduction](docs/images/scr
   [Quick navigation guide](docs/QUICK_NAVIGATION.md).
 - **Follow terminal output.** The visible pane refreshes about every two seconds;
   workspace and agent status refresh about every 15 seconds.
+- **Read further back.** Keep tapping **Load earlier** for older output, subject
+  to the PC's available scrollback and the per-pane cache. Update to bridge
+  **0.3.3** for reads beyond the old 2,000-line limit.
 - **Send the next instruction.** Type a message, insert a UTF-8 text file into a
   draft, or use commands found in terminal output. Sending also presses Enter.
 - **Make it readable.** Search the output, select text, choose a theme, and adjust
@@ -90,6 +95,8 @@ existing desktop splits are preserved.
 
 <img src="docs/images/screenshots/fit-menu.png" width="280" alt="Message options showing the Fit width toggle, file attachment, and commands with fictional terminal data behind it">
 
+<img src="docs/images/screenshots/sidebar.png" width="280" alt="Computer sidebar with three fictional computers and Manage connections">
+
 **What “multiple” means today:** several computers can be connected concurrently,
 with one selected Herdr session per SSH identity (host + port + username).
 Two named sessions on the same host/port/account share that connection slot;
@@ -103,8 +110,8 @@ You need **Android 8.0 or newer**, a Windows machine running Herdr, and the
 The bridge has been verified with Herdr **0.9.3**. Choose SSH password
 authentication or independent device pairing as described in [the pairing guide](docs/PAIRING.md).
 
-1. Download `herdr-on-the-go-0.2.2.apk` from the
-   [v0.2.2 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.2)
+1. Download `herdr-on-the-go-0.2.3.apk` from the
+   [v0.2.3 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.3)
    and open it on your Android device. If prompted, allow installation for the
    browser or file manager you are using.
 2. Tap **Pair without Windows login**, scan the PC's QR, and approve the phone's
@@ -156,8 +163,9 @@ The [safety guide](docs/BUILD.md#interrupted-commands) explains retry limits.
 
 **Keep expectations practical.** Background updates are best-effort: Android can
 suspend or kill the process, and there is no foreground service. Text attachments
-are inserted into messages; there is no binary file upload. History pages back
-without a line cap; each pane keeps the latest two million cached characters.
+are inserted into messages; there is no binary file upload. History has no fixed
+line-count ceiling; each pane keeps the latest two million cached characters.
+Reads still have a bounded reply size and depend on scrollback available on the PC.
 
 ## Under the hood
 

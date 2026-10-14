@@ -4,7 +4,7 @@ Native Android client for [herdr-bridge](https://github.com/RazvanManolache/herd
 on Windows, over SSH or paired TLS. Kotlin, Jetpack Compose, and Material 3.
 No vendor account is required. [Pairing setup](PAIRING.md).
 
-Package: `io.github.razvanmanolache.herdronthego` · version **0.2.2** (code 11) · Android 8.0+
+Package: `io.github.razvanmanolache.herdronthego` · version **0.2.3** (code 14) · Android 8.0+
 (minSdk 26; compile/target SDK 35).
 
 ## Features
@@ -14,6 +14,10 @@ Package: `io.github.razvanmanolache.herdronthego` · version **0.2.2** (code 11)
 - Session selection, a global tab strip and searchable **All tabs** picker across
   computers and spaces, terminal search, selectable text,
   font size (10–24 sp), themes, and commands extracted from terminal output.
+- A chat sidebar for switching computers and managing connections; Cancel in
+  the session picker closes an unattached attempt without forgetting its saved entry.
+- History reads grow in 1,000-line steps beyond the previous 2,000-line ceiling.
+  Use bridge **0.3.3** for larger reads; PC scrollback and byte budgets still apply.
 - Terminal colors and styles adapted for light/dark themes, plus an adaptive
   launcher icon with themed-icon support.
 - Optional phone-width fitting for single-pane tabs, restored when you leave
@@ -145,10 +149,16 @@ completed-result retention boundary. Older reservations require inspection.
 Unresolved actions are retained even when a connection is forgotten.
 
 Limits: 12,000 UTF-16 code units per message including Enter (a conservative limit
-for non-BMP characters), 2,000 history lines, 200,000 cached characters per pane,
+for non-BMP characters), 2,000,000 cached characters per pane,
 48,000 attachment bytes before decoding, 256 in-memory drafts, and 128 unresolved
 actions. Timeline subscriptions request only the visible pane. Polls are coalesced;
 snapshot responses do not accumulate in a waiting queue.
+
+History requests accept positive line counts without a fixed line-count ceiling.
+Each CLI history read is bounded to 2 MiB. Paired reply frames allow up to 16 MiB
+to accommodate JSON escaping; Android accepts frames up to 17 MiB. Incoming bridge
+requests remain capped at 128 KiB. **Load earlier** cannot recover output that the
+PC no longer retains.
 
 Paired connections send a read-only keep-alive every 20 seconds and automatically
 reconnect after a network interruption, with retry delays from two to 30 seconds.
@@ -194,7 +204,11 @@ This installs only onto the specified emulator, creates and stops a disposable
 Herdr session, and provides synthetic SSH authentication in front of the installed
 Windows bridge. It tests delayed output, message send/readback, a dropped reply
 followed by the same-key retry after controller restart, named-session notification
-reconnect, history limits, failed connection cleanup, and closing every transport.
+reconnect, history beyond 2,000 lines, failed connection cleanup, and closing every transport.
+
+The SSH fixture keeps the installed shell wrapper for discovery, but runs the
+current source responder for its disposable session; it does not install or
+replace the user's running bridge.
 It does not certify a real Windows SSH account or a physical phone.
 
 Reports: `app/build/test-results/testDebugUnitTest`, `app/build/reports/lint-results-debug.html`,

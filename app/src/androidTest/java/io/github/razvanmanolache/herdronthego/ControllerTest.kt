@@ -201,8 +201,8 @@ class ControllerTest {
                 // No tab switch, manual refresh, or subscription: polling must discover delayed output.
                 await { c.paneText[target.id]?.contains(late) == true }
                 repeat(5) { ui { c.loadEarlier(target.id, 400) } }
-                await { c.active()!!.historyLines[target.id] == BridgeLimits.LINES && c.busy == null }
-                assertFalse(c.canLoadEarlier(target.id))
+                await { c.active()!!.historyLines[target.id] == 5400 && c.busy == null }
+                assertTrue(c.paneText[target.id]!!.length <= BridgeLimits.HISTORY_CHARS)
                 val drop = "powershell -NoProfile -Command \"Write-Output ('DROP_ONCE_' + '$token')\""
                 ui { c.setDraft(target, drop); c.sendMessage(target, drop) }
                 await(40) { !c.sending }

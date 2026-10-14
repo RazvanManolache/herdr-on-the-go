@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.lifecycle.ViewModelProvider
@@ -93,7 +94,7 @@ class ScreenshotTest {
                 c.activeKey = desk.conn.key
                 c.setDraft(CommandTarget(desk.conn.key, desk.currentSession, desk.currentPaneId!!), "Summarize the changes before I commit.")
             }
-            for (mode in listOf("connections", "sessions", "terminal", "font-size", "computers", "jump", "search", "pair-request", "pair-code", "fit-menu")) {
+            for (mode in listOf("connections", "sessions", "terminal", "font-size", "computers", "jump", "search", "pair-request", "pair-code", "fit-menu", "sidebar")) {
                 scenario.onActivity { activity ->
                     c.setTheme(if (mode == "search") "sand" else "graphite")
                     c.setFont(if (mode == "font-size") 18f else 14f)
@@ -104,7 +105,7 @@ class ScreenshotTest {
                                     when (mode) {
                                         "connections" -> ConnectionsScreen(c)
                                         "sessions" -> SessionsScreen(c)
-                                        "terminal", "font-size", "fit-menu" -> AgentScreen(c)
+                                        "terminal", "font-size", "fit-menu", "sidebar" -> AgentScreen(c)
                                         "computers" -> { AgentScreen(c); ServersDialog(c) {} }
                                         "jump" -> { AgentScreen(c); JumpDialog(c) {} }
                                         "pair-request" -> PairScreen(c, "herdr-pair://desk.example:7443?fingerprint=${"a".repeat(64)}")
@@ -128,6 +129,11 @@ class ScreenshotTest {
                     compose.waitForIdle()
                     compose.onNodeWithText("Message options").assertIsDisplayed()
                 }
+                if (mode == "sidebar") {
+                    compose.onNodeWithContentDescription("menu").performClick()
+                    compose.waitForIdle()
+                    compose.onNodeWithText("Manage connections").assertIsDisplayed()
+                }
                 Thread.sleep(2000) // Allow software-rendered emulator frames and dialog animations to settle.
                 val bitmap = instrument.uiAutomation.takeScreenshot()
                 val folder = File(instrument.targetContext.cacheDir, "public-screenshots").also { it.mkdirs() }
@@ -135,6 +141,10 @@ class ScreenshotTest {
                     assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
                 }
                 bitmap.recycle()
+                if (mode == "fit-menu") {
+                    compose.onNodeWithText("CANCEL").performClick()
+                    compose.waitForIdle()
+                }
             }
         }
     }

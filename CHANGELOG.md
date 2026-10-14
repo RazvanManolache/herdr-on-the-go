@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 — 2026-10-14
 
 - Switching tabs or computers releases the unfocused tab's phone-width
   split at once; fit transitions are generation-guarded and run on a lane

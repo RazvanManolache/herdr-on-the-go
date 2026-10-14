@@ -20,7 +20,7 @@ This project is released under **GPLv3**.
 I also added **A− / A+ font controls** because I'm getting older, and sometimes
 the most useful upgrade is a bigger font. Squinting is not a productivity feature.
 
-[Download APK v0.2.1](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.1) ·
+[Download APK v0.2.2](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.2) ·
 [Windows bridge](https://github.com/RazvanManolache/herdr-bridge) ·
 [Build and setup guide](docs/BUILD.md) ·
 [License](LICENSE)
@@ -28,6 +28,10 @@ the most useful upgrade is a bigger font. Squinting is not a productivity featur
 Version **0.2.1** adds persistent paired connections, device pairing, and the
 navigation improvements described below. Install it over 0.1.1 or the 0.2.0
 preview to keep your saved connections. [Pair without a Windows login](docs/PAIRING.md).
+
+Version **0.2.2** adds the phone-width fit lifecycle: unfocused tabs and
+computers restore at once, the viewed tab heartbeats, and the bridge reaps
+unheard fits after five minutes. Install it over 0.2.1 to keep everything.
 
 This is an **unofficial, independent companion for [Herdr](https://herdr.dev/)**,
 not an official Herdr Android release. The app's display name is **Herdr on the Go**.
@@ -97,8 +101,8 @@ You need **Android 8.0 or newer**, a Windows machine running Herdr, and the
 The bridge has been verified with Herdr **0.9.3**. Choose SSH password
 authentication or independent device pairing as described in [the pairing guide](docs/PAIRING.md).
 
-1. Download `herdr-on-the-go-0.2.1.apk` from the
-   [v0.2.1 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.1)
+1. Download `herdr-on-the-go-0.2.2.apk` from the
+   [v0.2.2 release](https://github.com/RazvanManolache/herdr-on-the-go/releases/tag/v0.2.2)
    and open it on your Android device. If prompted, allow installation for the
    browser or file manager you are using.
 2. Tap **Pair without Windows login**, scan the PC's QR, and approve the phone's

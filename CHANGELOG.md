@@ -2,13 +2,20 @@
 
 ## 0.2.2 — 2026-10-14
 
+- Terminal colors and text styling render in readable light/dark palettes;
+  search and command extraction use the visible text.
+- New adaptive launcher icon, including a monochrome themed-icon variant.
+- **Fit width** in the message options menu temporarily fits a single-pane
+  Herdr tab to the phone, including adjustments when the font size changes.
+
 - Switching tabs or computers releases the unfocused tab's phone-width
   split at once; fit transitions are generation-guarded and run on a lane
   the status polls cannot starve, so backgrounding reliably says goodbye.
 - The viewed tab heartbeats every minute (`pane.fitTouch`); the Windows
   bridge (0.3.2) reaps fits unheard from for five minutes and resolves
   tabs from the live layout, so a killed app leaves its panel only briefly.
-- Refreshed documentation screenshots from the fictional-data fixture.
+- Refreshed ten documentation screenshots with fictional data, including
+  colored output and the **Fit width** control.
 
 ## 0.2.1 — 2026-10-13
 

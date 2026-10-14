@@ -8,12 +8,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Rule
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileOutputStream
@@ -23,6 +28,7 @@ import java.io.FileOutputStream
  */
 @RunWith(AndroidJUnit4::class)
 class ScreenshotTest {
+    @get:Rule val compose = createEmptyComposeRule()
     private val instrument = InstrumentationRegistry.getInstrumentation()
     private val pins = object : KnownHostsStore {
         override fun get(port: Int, host: String): String? = null
@@ -54,21 +60,21 @@ class ScreenshotTest {
                 "$host-space", panes.first().tabId, panes.first().paneId)
             srv.paneText[panes.first().paneId] = """
                 PS C:\Projects\demo-dashboard>
-                ❯ Check the API and run the tests.
+                \u001B[36m❯ Check the API and run the tests.\u001B[0m
 
-                [agent] Reviewing routes and tests...
-                ✓ Validated request handlers
-                ✓ Fixed the missing error state
-                ✓ 24 tests passed
+                \u001B[35m[agent] Reviewing routes and tests...\u001B[0m
+                \u001B[32m✓ Validated request handlers\u001B[0m
+                \u001B[32m✓ Fixed the missing error state\u001B[0m
+                \u001B[1;32m✓ 24 tests passed\u001B[0m
 
                 Build completed successfully.
-                No real project data in this demo.
+                \u001B[33mFictional demo. No private project data.\u001B[0m
 
                 ❯ npm run build
                 ❯ npm test
 
                 Ready for the next task.
-            """.trimIndent()
+            """.trimIndent().replace("\\u001B", "\u001B")
             c.servers[conn.key] = srv
             c.recordSummary(srv)
         }
@@ -87,7 +93,7 @@ class ScreenshotTest {
                 c.activeKey = desk.conn.key
                 c.setDraft(CommandTarget(desk.conn.key, desk.currentSession, desk.currentPaneId!!), "Summarize the changes before I commit.")
             }
-            for (mode in listOf("connections", "sessions", "terminal", "font-size", "computers", "jump", "search", "pair-request", "pair-code")) {
+            for (mode in listOf("connections", "sessions", "terminal", "font-size", "computers", "jump", "search", "pair-request", "pair-code", "fit-menu")) {
                 scenario.onActivity { activity ->
                     c.setTheme(if (mode == "search") "sand" else "graphite")
                     c.setFont(if (mode == "font-size") 18f else 14f)
@@ -98,7 +104,7 @@ class ScreenshotTest {
                                     when (mode) {
                                         "connections" -> ConnectionsScreen(c)
                                         "sessions" -> SessionsScreen(c)
-                                        "terminal", "font-size" -> AgentScreen(c)
+                                        "terminal", "font-size", "fit-menu" -> AgentScreen(c)
                                         "computers" -> { AgentScreen(c); ServersDialog(c) {} }
                                         "jump" -> { AgentScreen(c); JumpDialog(c) {} }
                                         "pair-request" -> PairScreen(c, "herdr-pair://desk.example:7443?fingerprint=${"a".repeat(64)}")
@@ -116,6 +122,12 @@ class ScreenshotTest {
                     }
                 }
                 instrument.waitForIdleSync()
+                compose.waitForIdle()
+                if (mode == "fit-menu") {
+                    compose.onNodeWithText("⋯").performClick()
+                    compose.waitForIdle()
+                    compose.onNodeWithText("Message options").assertIsDisplayed()
+                }
                 Thread.sleep(2000) // Allow software-rendered emulator frames and dialog animations to settle.
                 val bitmap = instrument.uiAutomation.takeScreenshot()
                 val folder = File(instrument.targetContext.cacheDir, "public-screenshots").also { it.mkdirs() }

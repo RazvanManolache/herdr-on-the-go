@@ -7,7 +7,7 @@ same time**, and my everyday machines run **Windows**. I wanted to check what my
 agents were doing, move between projects, and send the next instruction from my
 Android phone without constantly returning to the desk.
 
-That turned into two projects: a [Windows SSH bridge](https://github.com/RazvanManolache/herdr-bridge)
+That turned into two projects: a [Windows bridge](https://github.com/RazvanManolache/herdr-bridge)
 and this native Android companion. A small personal need has a habit of becoming
 another repository. Here we are.
 
@@ -25,13 +25,10 @@ the most useful upgrade is a bigger font. Squinting is not a productivity featur
 [Build and setup guide](docs/BUILD.md) ·
 [License](LICENSE)
 
-Version **0.2.1** adds persistent paired connections, device pairing, and the
-navigation improvements described below. Install it over 0.1.1 or the 0.2.0
-preview to keep your saved connections. [Pair without a Windows login](docs/PAIRING.md).
-
-Version **0.2.2** adds the phone-width fit lifecycle: unfocused tabs and
-computers restore at once, the viewed tab heartbeats, and the bridge reaps
-unheard fits after five minutes. Install it over 0.2.1 to keep everything.
+Version **0.2.2** adds readable terminal colors, a new app icon, and a way to
+fit the agent's output to your phone. Switching tabs or computers restores the
+desktop layout, as does leaving the app. Install over 0.2.1 to keep your saved
+connections and pairings. [Pair without a Windows login](docs/PAIRING.md).
 
 This is an **unofficial, independent companion for [Herdr](https://herdr.dev/)**,
 not an official Herdr Android release. The app's display name is **Herdr on the Go**.
@@ -40,7 +37,7 @@ not an official Herdr Android release. The app's display name is **Herdr on the 
 
 | Your computers | Terminal and messages | Bigger fonts, happier eyes |
 |:---:|:---:|:---:|
-| <img src="docs/images/screenshots/connections.png" width="240" alt="Herdr on the Go connection list with three fictional computers"> | <img src="docs/images/screenshots/terminal.png" width="240" alt="Agent terminal with task output, separate draft, and font controls"> | <img src="docs/images/screenshots/font-size.png" width="240" alt="The same terminal using a larger 18 sp font"> |
+| <img src="docs/images/screenshots/connections.png" width="240" alt="Herdr on the Go connection list with three fictional computers"> | <img src="docs/images/screenshots/terminal.png" width="240" alt="Colored agent terminal output, separate draft, and font controls"> | <img src="docs/images/screenshots/font-size.png" width="240" alt="The same terminal using a larger 18 sp font"> |
 
 | Named sessions | Jump across computers | Search and a lighter theme |
 |:---:|:---:|:---:|
@@ -76,17 +73,22 @@ to my private machines. [Screenshot provenance and reproduction](docs/images/scr
   the terminal font from **10 to 24 sp** with A− / A+.
   Agent colors render like on the desktop, in light- and dark-safe palettes.
 - **Fit the pane to the phone.** Opening a chat narrows that pane to the
-  phone’s column width so the agent rewraps instead of running off the
-  edge; the spare half of the tab explains why. Switching to another tab
-  or computer restores the unfocused one at once, as does leaving the app.
-  Toggle in the ⋯ message menu. The notice panel ignores keystrokes, the
-  viewed tab sends a heartbeat, and the bridge releases fits unheard from
-  for five minutes, so a killed app leaves its panel behind only briefly.
+  phone's width so terminal applications can rewrap their output. A notice
+  beside it explains the temporary desktop layout. Switch tabs or computers,
+  leave the app, or turn **Fit width** off to restore it. If the app stops
+  unexpectedly, bridge **0.3.2** restores abandoned fits after about five
+  minutes. [Phone-width setup and controls](docs/PHONE_WIDTH.md).
 - **Get completion notifications.** A tap can reopen the original computer,
   named session, and pane while the app process remains available.
 - **Handle interrupted replies carefully.** An unknown command outcome keeps its
   original request identity across reconnects and restarts instead of blindly
   submitting a fresh command.
+
+The **⋯** menu beside the message box contains **Fit width**, file attachment,
+and commands. Fitting is enabled by default and works on tabs with one pane;
+existing desktop splits are preserved.
+
+<img src="docs/images/screenshots/fit-menu.png" width="280" alt="Message options showing the Fit width toggle, file attachment, and commands with fictional terminal data behind it">
 
 **What “multiple” means today:** several computers can be connected concurrently,
 with one selected Herdr session per SSH identity (host + port + username).

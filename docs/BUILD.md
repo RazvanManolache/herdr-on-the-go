@@ -4,7 +4,7 @@ Native Android client for [herdr-bridge](https://github.com/RazvanManolache/herd
 on Windows, over SSH or paired TLS. Kotlin, Jetpack Compose, and Material 3.
 No vendor account is required. [Pairing setup](PAIRING.md).
 
-Package: `io.github.razvanmanolache.herdronthego` · version **0.2.1** (code 5) · Android 8.0+
+Package: `io.github.razvanmanolache.herdronthego` · version **0.2.2** (code 11) · Android 8.0+
 (minSdk 26; compile/target SDK 35).
 
 ## Features
@@ -14,6 +14,11 @@ Package: `io.github.razvanmanolache.herdronthego` · version **0.2.1** (code 5) 
 - Session selection, a global tab strip and searchable **All tabs** picker across
   computers and spaces, terminal search, selectable text,
   font size (10–24 sp), themes, and commands extracted from terminal output.
+- Terminal colors and styles adapted for light/dark themes, plus an adaptive
+  launcher icon with themed-icon support.
+- Optional phone-width fitting for single-pane tabs, restored when you leave
+  that tab or the app. Requires Windows bridge **0.3.2** for heartbeat/cleanup.
+  [Setup, toggle, and upgrade instructions](PHONE_WIDTH.md).
 - Automatic refresh: visible terminal output about every two seconds; snapshots
   and agent status about every 15 seconds while the process is running.
 - Text-file insertion into the current draft, with bounded UTF-8 decoding on a

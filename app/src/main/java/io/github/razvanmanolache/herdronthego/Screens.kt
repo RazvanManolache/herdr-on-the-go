@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
@@ -54,6 +55,11 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -390,12 +396,20 @@ fun SessionsScreen(c: BridgeController) {
             }
         }
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { c.attach(picked) }, modifier = Modifier.fillMaxWidth(),
-            enabled = c.sessions.any { it.name == picked && it.reachable } && c.busy == null,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = t.accent, contentColor = t.onAccent)) {
-            Text("CONNECT", fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { c.cancelConnect() },
+                modifier = Modifier.weight(1f)) {
+                Text("Cancel", color = t.dim)
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = { c.attach(picked) },
+                modifier = Modifier.weight(2f),
+                enabled = c.sessions.any { it.name == picked && it.reachable } && c.busy == null,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = t.accent, contentColor = t.onAccent)) {
+                Text("CONNECT", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -424,94 +438,155 @@ fun AgentScreen(c: BridgeController) {
 
     // NOTE: status-bar pad keeps the header row out from under the
     // system bar (untappable there on edge-to-edge, targetSdk 35).
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            // NOTE: the colored dot names the live computer behind this
-            // view — tap it to switch computers without leaving the app.
-            TextButton(onClick = { showServers = true }, modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Box(Modifier.size(8.dp).clip(CircleShape)
-                    .background(c.activeColor()))
-                Spacer(Modifier.width(6.dp))
-                Text(c.activeHost().ifBlank { "…" }, color = t.text,
-                    fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            TextButton(onClick = { showSpaces = true }, modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Text(snap?.workspaces?.firstOrNull { it.workspaceId == currentTab?.workspaceId }?.label
-                    ?: "…", color = t.text, fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(" ▾", color = t.text, fontSize = 15.sp)
-            }
-            IconButton(onClick = { confirmDisconnect = true },
-                modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Close, "close", tint = t.dim)
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            ThemeButton(c)
-            TextButton(onClick = { c.rawMode = !c.rawMode },
-                contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Text(if (c.rawMode) "Raw ✓" else "Raw", color = t.dim,
-                    fontSize = 13.sp)
-            }
-            Spacer(Modifier.weight(1f))
-            Text("${snap?.agents?.size ?: 0} agents", color = t.dim, maxLines = 1,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 4.dp))
-        }
-        // All connected computers and spaces stay one tap away.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    destinations.forEach { tab ->
-                        val selected = c.isActive(tab.connection) && tab.tabId == c.currentTabId
-                        Column(Modifier.padding(end = 4.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (selected) t.accent else t.surface)
-                            .clickable { c.openTab(tab) }
-                            .heightIn(min = 48.dp).width(150.dp)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(6.dp).clip(CircleShape)
-                                    .background(statusColor(t, tab.status)))
-                                Spacer(Modifier.width(6.dp))
-                                Text(tab.label, fontSize = 13.sp, maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (selected) t.onAccent else t.text,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+    val drawer = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    // NOTE: the drawer opens only from the menu button; edge swipes stay
+    // with the tab strip so horizontal scrolling never fights navigation.
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        gesturesEnabled = false,
+        drawerContent = {
+            ModalDrawerSheet(drawerContainerColor = t.surface) {
+                Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                    Text("Herdr on the Go", color = t.text,
+                        fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text("Computers", color = t.dim, fontSize = 12.sp)
+                    Spacer(Modifier.height(8.dp))
+                    c.liveServers().forEach { srv ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable {
+                                    drawerScope.launch { drawer.close() }
+                                    c.activate(srv.conn.key)
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(10.dp).clip(CircleShape)
+                                .background(srv.color))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(c.hostLabel(srv.conn), color = t.text,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                                Text("${srv.snapshot?.agents?.size ?: 0} agents",
+                                    color = t.dim, fontSize = 12.sp, maxLines = 1)
                             }
-                            Text(tab.context, fontSize = 10.sp, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = if (selected) t.onAccent else t.dim)
+                            if (c.isActive(srv.conn.key))
+                                Text("✓", color = t.accent,
+                                    fontWeight = FontWeight.Bold)
                         }
                     }
-                }
-                Box(Modifier.align(Alignment.CenterEnd).width(16.dp).height(48.dp)
-                    .background(Brush.horizontalGradient(listOf(t.bg.copy(alpha = 0f), t.bg))))
-            }
-            TextButton(onClick = { tabJump = true },
-                contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("All tabs", color = t.accent, fontSize = 13.sp)
-                    Text("${destinations.size} ▾", color = t.dim, fontSize = 12.sp)
+                    HorizontalDivider(color = t.surface2,
+                        modifier = Modifier.padding(vertical = 8.dp))
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable {
+                                drawerScope.launch { drawer.close() }
+                                c.screen = Screen.Connections
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("Manage connections", color = t.accent,
+                            fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
-        if (currentPane != null && target != null) {
-            ChatDetail(c, currentTab?.label ?: paneId, currentPane, paneId,
-                target,
-                searchOpen, { searchOpen = it },
-                c.draft(target), { c.setDraft(target, it) }, { showCommands = true },
-                modifier = Modifier.weight(1f))
-        } else {
-            Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
-                Text("No panes yet", color = t.dim)
+    ) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { drawerScope.launch { drawer.open() } },
+                    modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Filled.Menu, "menu", tint = t.text)
+                }
+                // NOTE: the colored dot names the live computer behind this
+                // view — tap it to switch computers without leaving the app.
+                TextButton(onClick = { showServers = true }, modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp)) {
+                    Box(Modifier.size(8.dp).clip(CircleShape)
+                        .background(c.activeColor()))
+                    Spacer(Modifier.width(6.dp))
+                    Text(c.activeHost().ifBlank { "…" }, color = t.text,
+                        fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                TextButton(onClick = { showSpaces = true }, modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp)) {
+                    Text(snap?.workspaces?.firstOrNull { it.workspaceId == currentTab?.workspaceId }?.label
+                        ?: "…", color = t.text, fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(" ▾", color = t.text, fontSize = 15.sp)
+                }
+                IconButton(onClick = { confirmDisconnect = true },
+                    modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Filled.Close, "close", tint = t.dim)
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                ThemeButton(c)
+                TextButton(onClick = { c.rawMode = !c.rawMode },
+                    contentPadding = PaddingValues(horizontal = 4.dp)) {
+                    Text(if (c.rawMode) "Raw ✓" else "Raw", color = t.dim,
+                        fontSize = 13.sp)
+                }
+                Spacer(Modifier.weight(1f))
+                Text("${snap?.agents?.size ?: 0} agents", color = t.dim, maxLines = 1,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp))
+            }
+            // All connected computers and spaces stay one tap away.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        destinations.forEach { tab ->
+                            val selected = c.isActive(tab.connection) && tab.tabId == c.currentTabId
+                            Column(Modifier.padding(end = 4.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (selected) t.accent else t.surface)
+                                .clickable { c.openTab(tab) }
+                                .heightIn(min = 48.dp).width(150.dp)
+                                .padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(6.dp).clip(CircleShape)
+                                        .background(statusColor(t, tab.status)))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(tab.label, fontSize = 13.sp, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = if (selected) t.onAccent else t.text,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                                }
+                                Text(tab.context, fontSize = 10.sp, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (selected) t.onAccent else t.dim)
+                            }
+                        }
+                    }
+                    Box(Modifier.align(Alignment.CenterEnd).width(16.dp).height(48.dp)
+                        .background(Brush.horizontalGradient(listOf(t.bg.copy(alpha = 0f), t.bg))))
+                }
+                TextButton(onClick = { tabJump = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("All tabs", color = t.accent, fontSize = 13.sp)
+                        Text("${destinations.size} ▾", color = t.dim, fontSize = 12.sp)
+                    }
+                }
+            }
+            if (currentPane != null && target != null) {
+                ChatDetail(c, currentTab?.label ?: paneId, currentPane, paneId,
+                    target,
+                    searchOpen, { searchOpen = it },
+                    c.draft(target), { c.setDraft(target, it) }, { showCommands = true },
+                    modifier = Modifier.weight(1f))
+            } else {
+                Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
+                    Text("No panes yet", color = t.dim)
+                }
             }
         }
     }

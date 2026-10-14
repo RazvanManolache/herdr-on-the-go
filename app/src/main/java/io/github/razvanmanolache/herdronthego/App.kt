@@ -747,19 +747,39 @@ class BridgeController(private val ctx: Context) {
         val srv = active() ?: run { screen = Screen.Connections; return }
         srv.keepConnected = false
         work {
-            recordSummary(srv)
-            srv.attachmentEpoch++
-            srv.attached = false
-            AgentNotif.cancelServer(ctx, srv)
-            releaseFit(srv)
-            srv.bridge.disconnect()
-            srv.sessionPassword = null
-            servers.remove(srv.conn.key)
-            recent.remove(srv.conn.key)
+            teardown(srv)
             val next = liveServers().lastOrNull()
             if (next != null) activateNow(next)
             else onUi { activeKey = null; screen = Screen.Connections }
         }
+    }
+
+    /** Abort from the session picker: the same teardown as disconnect,
+    but always landing on the connection list. Only an unattached
+    attempt is torn down; a live session is never killed from here. */
+    fun cancelConnect() {
+        val srv = active()
+        if (srv == null || srv.attached) {
+            screen = Screen.Connections
+            return
+        }
+        srv.keepConnected = false
+        work {
+            teardown(srv)
+            onUi { activeKey = null; screen = Screen.Connections }
+        }
+    }
+
+    private fun teardown(srv: ServerConn) {
+        recordSummary(srv)
+        srv.attachmentEpoch++
+        srv.attached = false
+        AgentNotif.cancelServer(ctx, srv)
+        releaseFit(srv)
+        srv.bridge.disconnect()
+        srv.sessionPassword = null
+        servers.remove(srv.conn.key)
+        recent.remove(srv.conn.key)
     }
 
     private fun activateNow(srv: ServerConn) {

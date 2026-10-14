@@ -95,6 +95,15 @@ class ServerConn(
     val helloWaiter = AtomicReference<CompletableFuture<HelloInfo>?>(null)
     val snapshotWaiter = AtomicReference<CompletableFuture<SnapshotState>?>(null)
     val historyLines = ConcurrentHashMap<String, Int>()
+    /** Pane the chat currently wants narrowed, and the width it asked for. */
+    var fitTarget by mutableStateOf<String?>(null)
+    var fitTargetCols by mutableStateOf(0)
+    /** Pane the server confirmed narrowed, and the measured width. */
+    var fitActive by mutableStateOf<String?>(null)
+    var fitCols by mutableStateOf(0)
+    // NOTE: fit transition generation. Every handoff runs on the fit lane,
+    // so a plain counter is sound; stale callbacks abort instead of acting.
+    var fitSeq = 0L
 }
 
 /**
@@ -108,6 +117,9 @@ class ServerConn(
 class BridgeController(private val ctx: Context) {
     fun ctxForToast(): Context = ctx
     private val bg = Executors.newSingleThreadExecutor()
+    // NOTE: fit release/heartbeat share one lane so the 2s watcher polls
+    // on bg can never starve them; a backgrounded phone still says goodbye.
+    private val fitIo = Executors.newSingleThreadExecutor()
     private val fileIo = Executors.newSingleThreadExecutor()
     private val pairIo = Executors.newSingleThreadExecutor()
     private val pairGeneration = java.util.concurrent.atomic.AtomicLong()
@@ -151,6 +163,28 @@ class BridgeController(private val ctx: Context) {
         private set
     var fontSp: Float by mutableStateOf(prefs.getFloat("font_sp", 14f))
         private set
+    /** Narrow the viewed pane to the phone width while the app is open. */
+    var fitEnabled by mutableStateOf(prefs.getBoolean("fit_enabled", true))
+        private set
+    /** False once the activity is paused; fits only apply in the foreground. */
+    var foreground by mutableStateOf(true)
+        private set
+
+    fun setFitWidthEnabled(v: Boolean) {
+        fitEnabled = v
+        check(prefs.edit().putBoolean("fit_enabled", v).commit()) { "Could not save fit setting" }
+        fitWork { servers.values.toList().forEach { reconcileFit(it, it.fitSeq) } }
+    }
+
+    /** Activity paused: the desktop layout must go back immediately. */
+    fun appPaused() {
+        foreground = false
+        fitWork { servers.values.toList().forEach { it.fitSeq++; releaseFit(it) } }
+    }
+
+    fun appResumed() {
+        foreground = true
+    }
 
     fun setTheme(id: String) {
         theme = THEMES.firstOrNull { it.id == id } ?: theme
@@ -381,6 +415,18 @@ class BridgeController(private val ctx: Context) {
         if (closed.get()) return
         try {
             bg.execute {
+                if (!closed.get()) try { block() } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                } catch (e: Exception) { onUi { error = e.message ?: "Request failed" } }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) { }
+    }
+
+    /** Fit lane: same drop/shutdown semantics as work(), never queued behind polls. */
+    private fun fitWork(block: () -> Unit) {
+        if (closed.get()) return
+        try {
+            fitIo.execute {
                 if (!closed.get()) try { block() } catch (_: InterruptedException) {
                     Thread.currentThread().interrupt()
                 } catch (e: Exception) { onUi { error = e.message ?: "Request failed" } }
@@ -665,6 +711,11 @@ class BridgeController(private val ctx: Context) {
                 touchRecent(srv.conn.key)
             }
             subscribeNow(srv, true)
+            fitWork {
+                srv.fitSeq++
+                releaseAllFits(srv)
+                reconcileFit(srv, srv.fitSeq, heal = true)
+            }
             recordSummary(srv)
             startWatcher()
             if (!recovering) onUi { screen = Screen.Agent }
@@ -672,6 +723,7 @@ class BridgeController(private val ctx: Context) {
             srv.attached = false
             srv.connPhase = "disconnected"
             srv.attachmentEpoch++
+            releaseFit(srv)
             srv.bridge.disconnect()
             if (recovering) throw e
             srv.keepConnected = false
@@ -699,6 +751,7 @@ class BridgeController(private val ctx: Context) {
             srv.attachmentEpoch++
             srv.attached = false
             AgentNotif.cancelServer(ctx, srv)
+            releaseFit(srv)
             srv.bridge.disconnect()
             srv.sessionPassword = null
             servers.remove(srv.conn.key)
@@ -713,7 +766,7 @@ class BridgeController(private val ctx: Context) {
         activeKey = srv.conn.key
         touchRecent(srv.conn.key)
         onUi { screen = if (srv.attached) Screen.Agent else Screen.Sessions }
-        if (srv.attached) { sendSnapshot(srv); subscribeNow(srv, true) }
+        if (srv.attached) { sendSnapshot(srv); subscribeNow(srv, true); fitWork { reconcileFit(srv, srv.fitSeq) } }
     }
 
     fun activate(key: String) {
@@ -721,6 +774,7 @@ class BridgeController(private val ctx: Context) {
         activeKey = key
         screen = if (srv.attached) Screen.Agent else Screen.Sessions
         work { activateNow(srv) }
+        fitWork { blurFitsExcept(srv) }
     }
 
     fun jumpTo(key: String, paneId: String, tabId: String, session: String? = null) {
@@ -731,9 +785,11 @@ class BridgeController(private val ctx: Context) {
                 ?: run { error = "The notification's pane no longer exists"; return }
             activeKey = key
             screen = Screen.Agent
+            fitWork { blurFitsExcept(srv) }
             selectPane(pane.paneId, pane.tabId, srv)
         } else {
             srv.pendingJump = paneId to tabId
+            fitWork { blurFitsExcept(srv) }
             attach(desiredSession, srv)
         }
     }
@@ -766,7 +822,7 @@ class BridgeController(private val ctx: Context) {
         if (srv.snapshot?.panes?.none { it.paneId == pane } != false) return
         // Only the visible pane needs terminal content; statuses come from snapshots.
         val payload = JSONObject().put("clientId", "android-${srv.conn.key.hashCode()}")
-            .put("paneIds", org.json.JSONArray().put(pane)).put("active", active)
+            .put("paneIds", org.json.JSONArray().put(pane)).put("active", active).put("ansi", true)
         if (active) payload.put("activePaneId", pane)
         val reply = srv.bridge.request("timeline.subscribe", srv.currentSession, payload, "ack", 15000)
         if (reply.type != "ack") throw IOException(reply.payload.optString("error", "Subscription rejected"))
@@ -786,7 +842,7 @@ class BridgeController(private val ctx: Context) {
         val epoch = srv.attachmentEpoch
         val lines = (srv.historyLines[target.id] ?: 400).coerceIn(1, BridgeLimits.LINES)
         val response = srv.bridge.request("raw.read", target.session,
-            JSONObject().put("paneId", target.id).put("lines", lines), "raw.read.result", 15000)
+            JSONObject().put("paneId", target.id).put("lines", lines).put("ansi", true), "raw.read.result", 15000)
         if (response.type != "raw.read.result") throw IOException(response.payload.optString("error", "Read rejected"))
         require(response.payload.getString("paneId") == target.id) { "Read response target mismatch" }
         val text = response.payload.getString("text").takeLast(BridgeLimits.HISTORY_CHARS)
@@ -812,6 +868,140 @@ class BridgeController(private val ctx: Context) {
                 readPane(srv, target)
             } finally { onUi { busy = null } }
         }
+    }
+
+    fun setFitTarget(target: CommandTarget, cols: Int) {
+        val srv = servers[target.connection] ?: return
+        srv.fitTarget = target.id
+        srv.fitTargetCols = cols.coerceIn(FitColumns.MIN, FitColumns.MAX)
+        srv.fitSeq++
+        fitWork { reconcileFit(srv, srv.fitSeq) }
+    }
+
+    fun clearFitTarget(target: CommandTarget) {
+        val srv = servers[target.connection] ?: return
+        if (srv.fitTarget != target.id) return
+        srv.fitTarget = null
+        srv.fitSeq++
+        fitWork { reconcileFit(srv, srv.fitSeq) }
+    }
+
+    /** Heartbeat while a pane stays fitted: the server reaps fits whose
+    phone stopped reporting (killed app) after a few minutes. */
+    fun touchFit(target: CommandTarget) {
+        val srv = servers[target.connection] ?: return
+        if (srv.fitActive != target.id) return
+        fitWork {
+            try {
+                srv.bridge.request("pane.fitTouch", srv.currentSession,
+                    JSONObject().put("paneId", target.id), "command.result", 15000)
+            } catch (_: Exception) { }
+        }
+    }
+
+    /** Re-split at the new font width after the fingers settle. The
+    DisposableEffect above owns enter/leave; this owns width changes. */
+    fun refitWidth(target: CommandTarget, cols: Int) {
+        val srv = servers[target.connection] ?: return
+        if (srv.fitTarget != target.id) return
+        srv.fitTargetCols = cols.coerceIn(FitColumns.MIN, FitColumns.MAX)
+        srv.fitSeq++
+        fitWork {
+            val seq = srv.fitSeq
+            if (srv.fitTarget != target.id || seq != srv.fitSeq) return@fitWork
+            releaseFit(srv)
+            reconcileFit(srv, seq)
+        }
+    }
+
+    /** "Fit 48" chip text for the viewed pane, or "" when inactive. */
+    fun fitBadge(target: CommandTarget): String {
+        val srv = servers[target.connection] ?: return ""
+        return if (srv.fitActive == target.id && srv.fitCols > 0) " \u00b7 Fit ${srv.fitCols}" else ""
+    }
+
+    // NOTE: heal only runs after (re)attach: it drops splits orphaned by
+    // a dead process. Every other path already releases what it fitted,
+    // and fitting a tab always closes that tab\u2019s stale side first.
+    private fun reconcileFit(srv: ServerConn, seq: Long, heal: Boolean = false) {
+        if (seq != srv.fitSeq) return
+        val target = srv.fitTarget
+        val want = fitEnabled && foreground && srv.attached &&
+            srv.bridge.isConnected() && target != null
+        if (want && srv.fitActive != target) {
+            // NOTE: the viewed tab changed; drop the previous tab's split
+            // before narrowing the new one so it never lingers behind.
+            releaseFit(srv)
+            applyFit(srv, target!!, srv.fitTargetCols, seq)
+        }
+        else if (!want && srv.fitActive != null) releaseFit(srv)
+        else if (!want && heal) srv.currentPaneId?.let { releaseFitPane(srv, it) }
+    }
+
+    private fun applyFit(srv: ServerConn, paneId: String, cols: Int, seq: Long) {
+        try {
+            val reply = srv.bridge.request("pane.fit", srv.currentSession,
+                JSONObject().put("paneId", paneId).put("cols", cols), "command.result", 90000)
+            // NOTE: fit state is written here on the worker so queued
+            // reconciles observe it; only the error toast needs the UI thread.
+            val ok = reply.payload.optBoolean("ok")
+            if (seq == srv.fitSeq && srv.fitTarget == paneId && servers[srv.conn.key] === srv) {
+                if (ok) {
+                    srv.fitActive = paneId
+                    // NOTE: the measured width is only meaningful when the
+                    // pane has long lines; otherwise show what we asked for.
+                    val measured = reply.payload.optInt("width", -1)
+                    srv.fitCols = if (measured >= FitColumns.MIN) measured else cols
+                } else onUi {
+                    // NOTE: the reason names the failing step so a rare
+                    // hiccup reports what happened instead of a riddle.
+                    val why = reply.payload.optString("reason", "")
+                    error = reply.payload.optString("error", "Fit rejected") +
+                        if (why.isNotBlank()) " ($why)" else ""
+                }
+            } else if (ok) {
+                // NOTE: the user moved on mid-fit; drop the split we just made.
+                releaseFitPane(srv, paneId)
+            }
+        } catch (e: Exception) {
+            onUi { if (srv.fitTarget == paneId) error = "Fit failed: ${e.message}" }
+            if (e is InterruptedException) Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun releaseFitPane(srv: ServerConn, paneId: String) {
+        try {
+            srv.bridge.request("pane.unfit", srv.currentSession,
+                JSONObject().put("paneId", paneId), "command.result", 20000)
+        } catch (_: Exception) { }
+        if (srv.fitActive == paneId) { srv.fitActive = null; srv.fitCols = 0 }
+    }
+
+    private fun releaseFit(srv: ServerConn) { srv.fitActive?.let { releaseFitPane(srv, it) } }
+
+    /** Drop every other server's fit when navigating: an unfocused
+    computer restores its desktop just like an unfocused tab. Returning
+    re-fits through the pane view effect. */
+    private fun blurFitsExcept(keep: ServerConn?) {
+        servers.values.toList().forEach {
+            if (it !== keep && (it.fitTarget != null || it.fitActive != null)) {
+                it.fitTarget = null
+                it.fitSeq++
+                releaseFit(it)
+            }
+        }
+    }
+
+    // NOTE: a killed process never sends unfit, so every fresh attach
+    // sweeps all recorded panels first; reconcile re-fits below if the
+    // chat is still open.
+    private fun releaseAllFits(srv: ServerConn) {
+        try {
+            srv.bridge.request("pane.unfitAll", srv.currentSession,
+                JSONObject(), "command.result", 30000)
+        } catch (_: Exception) { }
+        srv.fitActive = null
+        srv.fitCols = 0
     }
 
     private fun mutate(target: CommandTarget, type: String, payload: JSONObject, content: String): Boolean {
@@ -1056,6 +1246,7 @@ class BridgeController(private val ctx: Context) {
         servers.clear()
         attachmentTarget = null
         bg.shutdownNow()
+        fitIo.shutdownNow()
         fileIo.shutdownNow()
         main.removeCallbacksAndMessages(null)
     }

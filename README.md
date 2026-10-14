@@ -70,6 +70,14 @@ to my private machines. [Screenshot provenance and reproduction](docs/images/scr
   draft, or use commands found in terminal output. Sending also presses Enter.
 - **Make it readable.** Search the output, select text, choose a theme, and adjust
   the terminal font from **10 to 24 sp** with A− / A+.
+  Agent colors render like on the desktop, in light- and dark-safe palettes.
+- **Fit the pane to the phone.** Opening a chat narrows that pane to the
+  phone’s column width so the agent rewraps instead of running off the
+  edge; the spare half of the tab explains why. Switching to another tab
+  or computer restores the unfocused one at once, as does leaving the app.
+  Toggle in the ⋯ message menu. The notice panel ignores keystrokes, the
+  viewed tab sends a heartbeat, and the bridge releases fits unheard from
+  for five minutes, so a killed app leaves its panel behind only briefly.
 - **Get completion notifications.** A tap can reopen the original computer,
   named session, and pane while the app process remains available.
 - **Handle interrupted replies carefully.** An unknown command outcome keeps its

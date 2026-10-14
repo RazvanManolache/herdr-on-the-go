@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,6 +62,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -557,10 +559,55 @@ fun ChatDetail(
     modifier: Modifier = Modifier,
 ) {
     val t = c.theme
+    // NOTE: viewing a pane narrows it to the phone width; leaving the
+    // chat, pausing the app, or toggling the option restores the desktop.
+    val ctx = LocalContext.current
+    val density = LocalDensity.current
+    // NOTE: phone columns for the current font; recomputed live so the
+    // debounced refit below always uses the latest width.
+    val fitColsNow = run {
+        val dm = ctx.resources.displayMetrics
+        val paint = android.graphics.Paint().apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = c.fontSp * dm.scaledDensity
+        }
+        FitColumns.phoneCols(dm.widthPixels,
+            (32 * density.density).toInt(),
+            paint.measureText("0123456789") / 10f)
+    }
+    DisposableEffect(target, c.foreground, c.fitEnabled) {
+        c.setFitTarget(target, fitColsNow)
+        onDispose { c.clearFitTarget(target) }
+    }
+    // NOTE: font steps only re-split after two quiet seconds. One cycle
+    // per gesture instead of one per tap: no bridge queue, no flicker,
+    // and a hiccup can no longer stack error bars.
+    LaunchedEffect(target, c.fontSp) {
+        kotlinx.coroutines.delay(2000)
+        c.refitWidth(target, fitColsNow)
+    }
+    // NOTE: heartbeat keeps the fit alive server-side while this view is
+    // composed; leaving the tab cancels it and the fit is released.
+    LaunchedEffect(target) {
+        while (true) {
+            kotlinx.coroutines.delay(FitColumns.HEARTBEAT_MS)
+            c.touchFit(target)
+        }
+    }
     var query by remember(target) { mutableStateOf("") }
     var attachOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
-    val text = c.paneText[paneId] ?: ""
+    val raw = c.paneText[paneId] ?: ""
+    // NOTE: colors parse once per update; search and layout run on the
+    // stripped text so escape codes never match or measure.
+    val parsed = remember(raw, t.isLight) { Ansi.parse(raw, !t.isLight) }
+    val text = parsed.text
+    val lineStarts = remember(text) {
+        buildList {
+            add(0)
+            text.forEachIndexed { i, ch -> if (ch == '\n') add(i + 1) }
+        }
+    }
     val lines = remember(text) { text.split("\n") }
     val matches = remember(query, lines) {
         if (query.isBlank()) emptyList()
@@ -608,7 +655,7 @@ fun ChatDetail(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
                 Text("${c.active()?.connPhase ?: "disconnected"} · ${c.activeHost()}" +
-                    if (c.rawMode) " · Raw · rev ${c.paneRevision[paneId] ?: pane.revision}" else "",
+                    if (c.rawMode) " · Raw · rev ${c.paneRevision[paneId] ?: pane.revision}" else "" + c.fitBadge(target),
                     color = t.dim, fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
@@ -681,24 +728,30 @@ fun ChatDetail(
                 modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(lines) { i, line ->
                     SelectionContainer {
+                        val base = lineStarts[i]
                         val ann = buildAnnotatedString {
+                            append(line)
+                            for (s in parsed.spans) {
+                                if (s.end > base && s.start < base + line.length) {
+                                    addStyle(s.style,
+                                        (s.start - base).coerceAtLeast(0),
+                                        (s.end - base).coerceAtMost(line.length))
+                                }
+                            }
                             if (i in matchSet && query.isNotBlank()) {
+                                // NOTE: match ink wins over agent colors so
+                                // hits stay readable in every theme.
+                                val mark = SpanStyle(background = t.matchBg,
+                                    color = t.matchFg,
+                                    fontWeight = FontWeight.Bold)
                                 var start = 0
                                 while (true) {
                                     val hit = line.indexOf(query, start, ignoreCase = true)
-                                    if (hit < 0) {
-                                        append(line.substring(start))
-                                        break
-                                    }
-                                    append(line.substring(start, hit))
-                                    withStyle(SpanStyle(background = t.matchBg,
-                                        color = t.matchFg,
-                                        fontWeight = FontWeight.Bold)) {
-                                        append(line.substring(hit, hit + query.length))
-                                    }
+                                    if (hit < 0) break
+                                    addStyle(mark, hit, hit + query.length)
                                     start = hit + query.length
                                 }
-                            } else append(line)
+                            }
                         }
                         Text(ann, color = t.text,
                             fontFamily = FontFamily.Monospace,
@@ -777,6 +830,9 @@ fun ChatDetail(
                         moreOpen = false
                         onCommands()
                     }) { Text("⌘  Commands", color = t.text) }
+                    TextButton(onClick = { c.setFitWidthEnabled(!c.fitEnabled) }) {
+                        Text(if (c.fitEnabled) "◐  Fit width: on" else "◑  Fit width: off", color = t.text)
+                    }
                 }
             },
             confirmButton = {
@@ -888,7 +944,7 @@ fun CommandsSheet(c: BridgeController, paneId: String, onClose: () -> Unit) {
     val t = c.theme
     val text = c.paneText[paneId] ?: ""
     val commands = remember(text) {
-        text.split("\n").map { it.trim() }
+        Ansi.strip(text).split("\n").map { it.trim() }
             .filter { it.startsWith("❯") || it.startsWith(">") }
             .map { it.trimStart('❯', '>', ' ').trim() }
             .filter { it.isNotEmpty() }.distinct().takeLast(20).reversed()

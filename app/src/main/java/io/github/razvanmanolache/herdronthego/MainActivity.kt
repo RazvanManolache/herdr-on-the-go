@@ -35,9 +35,17 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent)
     }
 
+    override fun onPause() {
+        super.onPause()
+        if (::controller.isInitialized) controller.appPaused()
+    }
+
     override fun onResume() {
         super.onResume()
-        if (::controller.isInitialized) controller.resumeConnections()
+        if (::controller.isInitialized) {
+            controller.appResumed()
+            controller.resumeConnections()
+        }
     }
 
     /** Notification tap: land on the finished tab, reconnecting if needed. */

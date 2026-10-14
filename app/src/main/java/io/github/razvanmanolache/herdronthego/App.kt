@@ -860,7 +860,7 @@ class BridgeController(private val ctx: Context) {
 
     private fun readPane(srv: ServerConn, target: CommandTarget) {
         val epoch = srv.attachmentEpoch
-        val lines = (srv.historyLines[target.id] ?: 400).coerceIn(1, BridgeLimits.LINES)
+        val lines = (srv.historyLines[target.id] ?: 400).coerceAtLeast(1)
         val response = srv.bridge.request("raw.read", target.session,
             JSONObject().put("paneId", target.id).put("lines", lines).put("ansi", true), "raw.read.result", 15000)
         if (response.type != "raw.read.result") throw IOException(response.payload.optString("error", "Read rejected"))
@@ -876,15 +876,13 @@ class BridgeController(private val ctx: Context) {
         }
     }
 
-    fun canLoadEarlier(paneId: String): Boolean = (active()?.historyLines?.get(paneId) ?: 400) < BridgeLimits.LINES
     fun loadEarlier(paneId: String, currentLines: Int) {
         val target = targetFor(paneId) ?: return
         work {
             val srv = requireTarget(target)
             try {
                 onUi { busy = "Loading earlier…" }
-                srv.historyLines[paneId] = ((srv.historyLines[paneId] ?: currentLines.coerceAtLeast(400)) + 1000)
-                    .coerceAtMost(BridgeLimits.LINES)
+                srv.historyLines[paneId] = (srv.historyLines[paneId] ?: currentLines.coerceAtLeast(400)) + 1000
                 readPane(srv, target)
             } finally { onUi { busy = null } }
         }

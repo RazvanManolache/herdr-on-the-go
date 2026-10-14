@@ -156,8 +156,8 @@ The [safety guide](docs/BUILD.md#interrupted-commands) explains retry limits.
 
 **Keep expectations practical.** Background updates are best-effort: Android can
 suspend or kill the process, and there is no foreground service. Text attachments
-are inserted into messages; there is no binary file upload. History is bounded
-at 2,000 lines and 200,000 cached characters per pane.
+are inserted into messages; there is no binary file upload. History pages back
+without a line cap; each pane keeps the latest two million cached characters.
 
 ## Under the hood
 

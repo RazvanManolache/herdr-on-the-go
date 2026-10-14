@@ -786,7 +786,7 @@ fun ChatDetail(
             Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("No messages yet", color = t.text)
-                    TextButton(enabled = c.canLoadEarlier(paneId), onClick = {
+                    TextButton(onClick = {
                         c.loadEarlier(paneId, lines.size)
                     }) { Text("↑ Load earlier", color = t.accent) }
                 }
@@ -857,8 +857,8 @@ fun ChatDetail(
                     }
                 }
                 }
-            TextButton(enabled = c.canLoadEarlier(paneId), onClick = { c.loadEarlier(paneId, lines.size) }) {
-                Text(if (c.canLoadEarlier(paneId)) "↑ Load earlier" else "History limit: 2,000 lines", color = t.accent)
+            TextButton(onClick = { c.loadEarlier(paneId, lines.size) }) {
+                Text("↑ Load earlier", color = t.accent)
             }
         }
         // input row: nav-bar + keyboard pads keep the message box

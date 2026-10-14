@@ -17,9 +17,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 object BridgeLimits {
     const val TEXT = 12000
-    const val LINES = 2000
     const val PANES = 64
-    const val HISTORY_CHARS = 200000
+    // NOTE: matches the bridge reply budget (~2MB); Load earlier pages into this.
+    const val HISTORY_CHARS = 2000000
     const val ATTACH_BYTES = 48000
     const val FRAME_BYTES = 17 * 1024 * 1024
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- History pages back without a line cap: Load earlier keeps
+  fetching in thousand-line pages and the per-pane cache holds
+  the latest two million characters. The bridge accepts any
+  positive line count and its replies clear a larger frame.
+
 ## 0.2.2 — 2026-10-14
 
 - Terminal colors and text styling render in readable light/dark palettes;

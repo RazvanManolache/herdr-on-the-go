@@ -37,7 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -45,7 +45,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -324,7 +324,7 @@ fun SshFormScreen(c: BridgeController, edit: SavedConnection?) {
         .navigationBarsPadding().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { c.screen = Screen.Connections }) {
-                Icon(Icons.Filled.ArrowBack, "back", tint = t.accent)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "back", tint = t.accent)
             }
             Text("New SSH connection", color = t.text,
                 style = MaterialTheme.typography.headlineSmall,
@@ -644,7 +644,7 @@ fun ChatDetail(
         val dm = ctx.resources.displayMetrics
         val paint = android.graphics.Paint().apply {
             typeface = android.graphics.Typeface.MONOSPACE
-            textSize = c.fontSp * dm.scaledDensity
+            textSize = with(density) { c.fontSp.sp.toPx() }
         }
         FitColumns.phoneCols(dm.widthPixels,
             (32 * density.density).toInt(),
@@ -885,7 +885,7 @@ fun ChatDetail(
                 enabled = !c.sending) {
                 if (c.sending) CircularProgressIndicator(
                     modifier = Modifier.size(22.dp), color = t.accent)
-                else Icon(Icons.Filled.Send, "send", tint = t.accent)
+                else Icon(Icons.AutoMirrored.Filled.Send, "send", tint = t.accent)
             }
         }
         if (c.busy != null) Text(c.busy ?: "", color = t.dim)
@@ -1154,6 +1154,6 @@ fun RefreshButton(c: BridgeController) {
 @Composable
 fun BackButton(c: BridgeController, onBack: () -> Unit) {
     IconButton(onClick = onBack) {
-        Icon(Icons.Filled.ArrowBack, "back", tint = c.theme.accent)
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, "back", tint = c.theme.accent)
     }
 }

@@ -194,3 +194,11 @@ like [PicoConsole](https://github.com/RazvanManolache/PicoConsole) and
 
 Copyright © 2026 Razvan Manolache. Original project code is licensed under
 [GNU GPL version 3](LICENSE), SPDX `GPL-3.0-only`.
+
+## Build on GitHub
+
+Open [Actions](https://github.com/RazvanManolache/herdr-on-the-go/actions), select **Android build**, then choose **Run workflow** and a branch. When the run succeeds, download its files from **Artifacts** at the bottom of the run page (GitHub sign-in required).
+
+herdr-development-apk is a debug-signed APK for testing. herdr-release-unsigned needs your own release signing before installation. Development APKs cannot update a release-signed installation in place.
+
+Build downloads are retained for 14 days. They are development snapshots, separate from tagged releases; running this workflow does not publish a release.

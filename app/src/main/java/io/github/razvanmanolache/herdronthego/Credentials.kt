@@ -16,7 +16,7 @@ class Credentials(private val ctx: Context) {
         try {
             val legacy = ctx.getSharedPreferences("herdr_on_the_go_secret_plain", Context.MODE_PRIVATE)
             if (legacy.all.isNotEmpty()) {
-                if (!legacy.edit().clear().commit() || !ctx.deleteSharedPreferences("herdr_on_the_go_secret_plain")) {
+                if (!legacy.commitEdit { clear() } || !ctx.deleteSharedPreferences("herdr_on_the_go_secret_plain")) {
                     legacyCleanupFailed = true
                     notice = "Legacy unencrypted credentials could not be removed. Clear app storage before saving passwords"
                 } else {
@@ -47,10 +47,10 @@ class Credentials(private val ctx: Context) {
     fun get(c: SavedConnection): String? = encrypted?.getString(key(c), null)
     fun save(c: SavedConnection, password: String) {
         val store = encrypted ?: throw IOException("Secure password storage is unavailable")
-        check(store.edit().putString(key(c), password).commit()) { "Could not save password securely" }
+        check(store.commitEdit { putString(key(c), password) }) { "Could not save password securely" }
     }
     fun remove(c: SavedConnection) {
         val store = encrypted ?: throw IOException("Secure storage must be available to erase saved credentials")
-        check(store.edit().remove(key(c)).commit()) { "Could not erase saved password" }
+        check(store.commitEdit { remove(key(c)) }) { "Could not erase saved password" }
     }
 }

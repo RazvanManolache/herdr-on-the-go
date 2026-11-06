@@ -1,5 +1,6 @@
 package io.github.razvanmanolache.herdronthego
 
+import android.annotation.SuppressLint
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -45,6 +46,9 @@ data class PairAddress(val host: String, val port: Int, val fingerprint: String)
 class PinnedTlsClient(private val address: PairAddress) : Closeable {
     private val sockets = ConcurrentHashMap.newKeySet<Socket>()
     @Volatile private var closed = false
+    // Pairing trusts a physically scanned SHA-256 pin, not public CAs. The
+    // manager below checks expiry and exact certificate identity before TLS completes.
+    @SuppressLint("CustomX509TrustManager")
     private val context = SSLContext.getInstance("TLS").also { context ->
         val trust = object : X509TrustManager {
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()

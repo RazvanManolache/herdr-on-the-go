@@ -2,6 +2,7 @@ package io.github.razvanmanolache.herdronthego
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -148,7 +149,7 @@ class BridgeController(private val ctx: Context) {
         override fun get(port: Int, host: String): String? =
             prefs.getString("hk2:$port:$host", null)
         override fun put(port: Int, host: String, key: String) {
-            check(prefs.edit().putString("hk2:$port:$host", key).commit()) { "Could not save trusted host key" }
+            check(prefs.commitEdit { putString("hk2:$port:$host", key) }) { "Could not save trusted host key" }
         }
     }
 
@@ -172,7 +173,7 @@ class BridgeController(private val ctx: Context) {
 
     fun setFitWidthEnabled(v: Boolean) {
         fitEnabled = v
-        check(prefs.edit().putBoolean("fit_enabled", v).commit()) { "Could not save fit setting" }
+        check(prefs.commitEdit { putBoolean("fit_enabled", v) }) { "Could not save fit setting" }
         fitWork { servers.values.toList().forEach { reconcileFit(it, it.fitSeq) } }
     }
 
@@ -188,12 +189,12 @@ class BridgeController(private val ctx: Context) {
 
     fun setTheme(id: String) {
         theme = THEMES.firstOrNull { it.id == id } ?: theme
-        prefs.edit().putString("theme_id", theme.id).apply()
+        prefs.edit { putString("theme_id", theme.id) }
     }
 
     fun setFont(sp: Float) {
         fontSp = sp.coerceIn(10f, 24f)
-        prefs.edit().putFloat("font_sp", fontSp).apply()
+        prefs.edit { putFloat("font_sp", fontSp) }
     }
     var rawMode: Boolean by mutableStateOf(false)
     var sending: Boolean by mutableStateOf(false)
@@ -249,7 +250,7 @@ class BridgeController(private val ctx: Context) {
             }.toSet()
         val idx = SERVER_COLORS.indices.firstOrNull { it !in used }
             ?: (c.key.hashCode().and(0x7fffffff) % SERVER_COLORS.size)
-        prefs.edit().putInt("color:${c.key}", idx).apply()
+        prefs.edit { putInt("color:${c.key}", idx) }
         return SERVER_COLORS[idx]
     }
 
@@ -304,9 +305,10 @@ class BridgeController(private val ctx: Context) {
     fun recordSummary(srv: ServerConn) {
         val snap = srv.snapshot ?: return
         val ws = snap.workspaces.firstOrNull { it.focused }?.label ?: ""
-        prefs.edit().putString(sumKey(srv.conn),
-            "${srv.currentSession} · $ws · ${snap.agents.size} agents · " +
-                System.currentTimeMillis()).apply()
+        prefs.edit {
+            putString(sumKey(srv.conn),
+                "${srv.currentSession} · $ws · ${snap.agents.size} agents · " + System.currentTimeMillis())
+        }
     }
 
     fun summaryFor(c: SavedConnection): String? {
@@ -352,13 +354,14 @@ class BridgeController(private val ctx: Context) {
     fun saveConnection(c: SavedConnection, password: String?) {
         if (password != null) credentials.save(c, password)
         val list = savedConnections().filterNot { it.key == c.key } + c
-        val editor = prefs.edit().putInt("conns_n", list.size)
-        list.forEachIndexed { i, s ->
-            editor.putString(
-                "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session, s.protocol, s.certificate)
-                    .joinToString(CONN_SEP))
-        }
-        check(editor.commit()) { "Could not save the selected connection/session" }
+        check(prefs.commitEdit {
+            putInt("conns_n", list.size)
+            list.forEachIndexed { i, s ->
+                putString(
+                    "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session, s.protocol, s.certificate)
+                        .joinToString(CONN_SEP))
+            }
+        }) { "Could not save the selected connection/session" }
         onUi { savedRevision++ }
     }
 
@@ -374,15 +377,16 @@ class BridgeController(private val ctx: Context) {
             drafts.keys.filter { it.connection == c.key }.forEach { drafts.remove(it) }
             recent.remove(c.key)
             val list = savedConnections().filterNot { it.key == c.key }
-            val editor = prefs.edit().putInt("conns_n", list.size)
-            list.forEachIndexed { i, s ->
-                editor.putString(
-                    "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session, s.protocol, s.certificate)
-                        .joinToString(CONN_SEP))
-            }
-            editor.remove("conn_${list.size}")
-            editor.remove("color:${c.key}").remove(sumKey(c))
-            check(editor.commit()) { "Could not forget connection" }
+            check(prefs.commitEdit {
+                putInt("conns_n", list.size)
+                list.forEachIndexed { i, s ->
+                    putString(
+                        "conn_$i", listOf(s.host, s.port.toString(), s.user, s.session, s.protocol, s.certificate)
+                            .joinToString(CONN_SEP))
+                }
+                remove("conn_${list.size}")
+                remove("color:${c.key}").remove(sumKey(c))
+            }) { "Could not forget connection" }
             onUi { savedRevision++ }
             if (activeKey == c.key) {
                 val next = recent.lastOrNull()?.let { servers[it] }

@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
@@ -17,46 +16,43 @@ if (releaseSigningPath != null) {
 }
 
 android {
-    namespace 'io.github.razvanmanolache.herdronthego'
-    compileSdk 35
+    namespace = 'io.github.razvanmanolache.herdronthego'
+    compileSdk = 35
 
     defaultConfig {
-        applicationId 'io.github.razvanmanolache.herdronthego'
-        minSdk 26
-        targetSdk 35
-        versionCode 14
-        versionName '0.2.3'
-        testInstrumentationRunner 'io.github.razvanmanolache.herdronthego.IsolatedTestRunner'
+        applicationId = 'io.github.razvanmanolache.herdronthego'
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 14
+        versionName = '0.2.3'
+        testInstrumentationRunner = 'io.github.razvanmanolache.herdronthego.IsolatedTestRunner'
     }
 
     signingConfigs {
         if (releaseSigningPath != null) {
             release {
-                storeFile file(releaseSigning.getProperty('storeFile'))
-                storePassword releaseSigning.getProperty('storePassword')
-                keyAlias releaseSigning.getProperty('keyAlias')
-                keyPassword releaseSigning.getProperty('keyPassword')
+                storeFile = file(releaseSigning.getProperty('storeFile'))
+                storePassword = releaseSigning.getProperty('storePassword')
+                keyAlias = releaseSigning.getProperty('keyAlias')
+                keyPassword = releaseSigning.getProperty('keyPassword')
             }
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
-            if (releaseSigningPath != null) signingConfig signingConfigs.release
+            minifyEnabled = false
+            if (releaseSigningPath != null) signingConfig = signingConfigs.release
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = '17'
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        compose true
-        buildConfig true
+        compose = true
+        buildConfig = true
     }
 }
 

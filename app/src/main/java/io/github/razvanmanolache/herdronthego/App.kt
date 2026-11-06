@@ -950,7 +950,7 @@ class BridgeController(private val ctx: Context) {
             // NOTE: the viewed tab changed; drop the previous tab's split
             // before narrowing the new one so it never lingers behind.
             releaseFit(srv)
-            applyFit(srv, target!!, srv.fitTargetCols, seq)
+            applyFit(srv, target, srv.fitTargetCols, seq)
         }
         else if (!want && srv.fitActive != null) releaseFit(srv)
         else if (!want && heal) srv.currentPaneId?.let { releaseFitPane(srv, it) }

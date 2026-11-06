@@ -132,8 +132,8 @@ removing an older installation.
 
 ## Build it yourself
 
-Install **JDK 17**, Android SDK platform **35**, and Android build tools **34.0.0**.
-The checked-in wrapper pins **Gradle 8.11.1** and its distribution checksum.
+Install **JDK 17**, Android SDK platform **35**, and Android build tools **36.0.0**.
+The checked-in wrapper pins **Gradle 9.8.2** and its distribution checksum.
 In PowerShell:
 
 ```powershell
